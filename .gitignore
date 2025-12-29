@@ -1,0 +1,11 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environment
+venv/
+
+# Backend runtime artifacts
+backend/data/
+backend/state/
+backend/audit.log
