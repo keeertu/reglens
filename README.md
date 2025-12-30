@@ -1,110 +1,153 @@
 # RegLens - Regulatory Compliance Analysis Platform
 
-RegLens is a demonstration platform that uses LLMs to analyze regulatory document changes and suggest compliance tasks.
+**RegLens** is an AI-powered regulatory compliance platform designed to help organizations track, analyze, and adapt to changing regulations. By leveraging advanced LLMs (DeepSeek via OpenRouter), RegLens automatically detects semantic changes between regulatory documents and generates actionable compliance tasks.
 
-## Prerequisites
-
-Before starting, ensure you have the following installed on your system:
-
-- **Python 3.9+**: [Download Python](https://www.python.org/downloads/)
-- **Node.js 18+** (LTS recommended): [Download Node.js](https://nodejs.org/)
-- **Ollama**: [Download Ollama](https://ollama.com/) (Required for local LLM inference)
+![Status](https://img.shields.io/badge/Status-Hackathon_MVP-blue)
+![License](https://img.shields.io/badge/License-MIT-green)
 
 ---
 
-## 🚀 Setup & Run Instructions
+## 🌟 Key Features
 
-### 1. LLM Setup (Ollama)
+-   **Semantic Diff Analysis**: Goes beyond simple text diffs (git-style) to understand *meaningful* regulatory changes using tailored algorithms.
+-   **AI-Powered Explanations**: Uses **DeepSeek-V3** (via OpenRouter) to interpret complex legal jargon and explain *why* a change matters.
+-   **Automated Task Generation**: Automatically converts regulatory updates into actionable tasks (e.g., "Update Policy X", "Review Section Y") for compliance teams.
+-   **PDF Support**: Native support for uploading and processing PDF regulatory documents.
+-   **Modern UI**: A sleek, responsive dashboard built with React, TailwindCSS, and Framer Motion.
 
-RegLens uses a local LLM via Ollama. You must have Ollama running and the model pulled before using the analysis features.
+---
 
-1.  **Start Ollama** (if not already running in the tray/background):
+## 🏗️ Architecture
+
+RegLens follows a modern client-server architecture:
+
+```mermaid
+graph TD
+    User([Compliance Officer]) -->|Uploads Docs| Frontend[Frontend (React + Vite)]
+    Frontend -->|REST API| Backend[Backend (FastAPI)]
+    
+    subgraph "Backend Services"
+        Backend -->|Extract Text| PDF[PyMuPDF Processor]
+        Backend -->|Compute Diffs| Diff[Semantic Diff Engine]
+        Backend -->|Analyze Context| LLM[DeepSeek LLM (OpenRouter)]
+    end
+    
+    LLM -->|Explanations| Backend
+    Diff -->|Changes| Backend
+    Backend -->|JSON Response| Frontend
+```
+
+### Tech Stack
+
+-   **Frontend**:
+    -   React 18
+    -   Vite 5
+    -   TailwindCSS & Framer Motion for styling/animations
+    -   Axios for API communication
+-   **Backend**:
+    -   Python 3.9+
+    -   FastAPI (High-performance web framework)
+    -   PyMuPDF (fitz) for PDF processing
+    -   OpenRouter API (DeepSeek-V3 model)
+
+---
+
+## 🚀 Getting Started
+
+Follow these instructions to set up the project locally.
+
+### Prerequisites
+
+-   **Python 3.9+** installed.
+-   **Node.js 18+** installed.
+-   **OpenRouter API Key**: Get one at [openrouter.ai](https://openrouter.ai/).
+
+### 1. Backend Setup
+
+1.  Navigate to the backend directory:
     ```bash
-    ollama serve
+    cd backend
     ```
-    *Keep this terminal open if it doesn't run in the background.*
 
-2.  **Pull the required model**:
-    Open a new terminal and run:
-    ```bash
-    ollama pull mistral
-    ```
-    *Note: You can check `llm_pipeline/config.py` if a different default model is configured.*
-
-### 2. Backend Setup (Python)
-
-The backend powers the API and connects to the LLM pipeline.
-
-1.  **Create a virtual environment** (at the project root):
+2.  Create and activate a virtual environment:
     ```bash
     # Windows
     python -m venv venv
+    .\venv\Scripts\Activate
 
     # macOS/Linux
     python3 -m venv venv
-    ```
-
-2.  **Activate the virtual environment**:
-    ```bash
-    # Windows (PowerShell)
-    .\venv\Scripts\Activate
-
-    # Windows (Command Prompt)
-    venv\Scripts\activate
-
-    # macOS/Linux
     source venv/bin/activate
     ```
 
-3.  **Install Python dependencies**:
+3.  Install dependencies:
     ```bash
     pip install -r requirements.txt
     ```
 
-4.  **Start the FastAPI server**:
+4.  *(Optional)* Configuration:
+    -   Open `main.py` and verify/update the `OPENROUTER_API_KEY` and `MODEL_NAME` constants if you want to use your own key or a different model.
+    -   *Note: For production, we recommend moving these to a `.env` file.*
+
+5.  Run the server:
     ```bash
-    cd backend
     uvicorn main:app --reload --host 0.0.0.0 --port 8000
     ```
-    The API will be available at `http://localhost:8000`.
-    API Documentation: `http://localhost:8000/docs`
+    The API will be available at `http://localhost:8000`. Docs at `/docs`.
 
-### 3. Frontend Setup (React)
+### 2. Frontend Setup
 
-The frontend provides the user interface for uploading documents and viewing analysis.
-
-1.  **Navigate to the frontend directory** (open a new terminal):
+1.  Open a new terminal and navigate to the frontend directory:
     ```bash
     cd frontend
     ```
 
-2.  **Install Node dependencies**:
+2.  Install dependencies:
     ```bash
     npm install
     ```
 
-3.  **Start the development server**:
+3.  Start the development server:
     ```bash
     npm run dev
     ```
-    The application will launch at `http://localhost:5173` (or similar).
+    The application will launch at `http://localhost:5173`.
 
 ---
 
-## 🧪 Running the LLM Pipeline Standalone
+## 📖 Usage Guide
 
-You can run the analysis script directly from the command line without the full UI.
+1.  **Upload Documents**: On the home page, select your "Old Regulation" file (PDF/Text) and the "New Regulation" file.
+2.  **Analyze**: Click "Analyze Regulation". The system will process the documents, extract text, and calculate differences.
+3.  **Review Changes**:
+    -   **Summary**: Read the AI-generated high-level summary of what changed and why.
+    -   **Detailed Diffs**: View side-by-side comparisons of specific sections.
+    -   **Tasks**: Review the automatically generated compliance tasks based on the changes.
+4.  **Action**: Use the tasks list to assign work to your team.
 
-1.  **Ensure your virtual environment is activated** (`source venv/bin/activate` or windows equivalent).
+---
 
-2.  **Navigate to the pipeline directory**:
-    ```bash
-    cd llm_pipeline
-    ```
+## 📂 Project Structure
 
-3.  **Run the analysis script**:
-    ```bash
-    # Example usage
-    python analyze.py --old inputs/old_regulation.txt --new inputs/new_regulation.txt --output results.json
-    ```
-    *Make sure you have sample text files in `llm_pipeline/inputs/`.*
+```
+reglens/
+├── backend/                # Python FastAPI Backend
+│   ├── main.py             # Logic entry point (API, PDF, Diff, LLM)
+│   ├── requirements.txt    # Python dependencies
+│   └── ...
+├── frontend/               # React Frontend
+│   ├── src/                # Components and Pages
+│   ├── package.json        # Node dependencies
+│   └── ...
+└── README.md               # This file
+```
+
+---
+
+## 🤝 Contributing
+
+This is a hackathon project, but contributions are welcome! feel free to fork and submit a PR.
+
+---
+
+*Built with ❤️ for the Future of Compliance.*

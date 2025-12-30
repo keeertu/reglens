@@ -9,6 +9,9 @@ import fitz  # PyMuPDF
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+
+TASK_STORE = []
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],  # frontend
@@ -93,10 +96,39 @@ def diff_sections(aligned):
     return diffs
 
 def compress_changes(changes):
+    grouped = {}
+
+    for anchor, line in changes:
+        grouped.setdefault(anchor, []).append(line)
+
     records = []
-    for anchor, line in changes[:MAX_CHANGES_FOR_LLM]:
-        records.append({"section": anchor, "change": line[:MAX_TEXT_LEN]})
-    return records
+
+    for anchor, lines in grouped.items():
+        plus = [l[1:].strip() for l in lines if l.startswith("+")]
+        minus = [l[1:].strip() for l in lines if l.startswith("-")]
+
+        if plus and minus:
+            records.append({
+                "section": anchor,
+                "type": "MODIFIED",
+                "before": minus[0][:MAX_TEXT_LEN],
+                "after": plus[0][:MAX_TEXT_LEN],
+            })
+        elif plus:
+            records.append({
+                "section": anchor,
+                "type": "ADDED",
+                "text": plus[0][:MAX_TEXT_LEN],
+            })
+        elif minus:
+            records.append({
+                "section": anchor,
+                "type": "REMOVED",
+                "text": minus[0][:MAX_TEXT_LEN],
+            })
+
+    return records[:MAX_CHANGES_FOR_LLM]
+
 
 # ================= LLM =================
 
@@ -115,7 +147,35 @@ def explain_with_openrouter(records):
     r.raise_for_status()
     return r.json()["choices"][0]["message"]["content"]
 
+
+def generate_tasks(changes):
+    tasks = []
+
+    for idx, c in enumerate(changes, start=1):
+        task = {
+            "id": f"T{idx}",
+            "title": f"{c['type'].capitalize()} regulation in {c['section']}",
+            "description": (
+                f"Regulatory change detected in {c['section']}.\n\n"
+                f"Details:\n"
+                f"{c.get('before', '')}\n→\n{c.get('after', c.get('text', ''))}"
+            ),
+            "priority": "high" if c["type"] == "MODIFIED" else "medium",
+            "owner": "Compliance",
+            "source_section": c["section"],
+            "change_type": c["type"]
+        }
+        tasks.append(task)
+
+    return tasks
+
 # ================= API ENDPOINT =================
+@app.get("/tasks")
+def get_tasks():
+    return {
+        "tasks": TASK_STORE,
+        "count": len(TASK_STORE),
+    }
 
 @app.post("/analyze")
 async def analyze(old: UploadFile = File(...), new: UploadFile = File(...)):
@@ -138,11 +198,20 @@ async def analyze(old: UploadFile = File(...), new: UploadFile = File(...)):
         compressed = compress_changes(raw)
         explanation = explain_with_openrouter(compressed)
 
+        tasks = generate_tasks(compressed)
+        # overwrite task store for now (single-session demo)
+        TASK_STORE.clear()
+        TASK_STORE.extend(tasks)
+
         return {
             "summary": explanation,
             "changes": compressed,
-            "metadata": {"model": MODEL_NAME},
+            "metadata": {
+                "model": MODEL_NAME,
+                "task_count": len(tasks)
+            }
         }
+
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
