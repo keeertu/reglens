@@ -1,145 +1,148 @@
-
-import sys
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from pathlib import Path
-
-# Add llm_pipeline to sys.path explicitly to allow imports
-PIPELINE_PATH = Path(__file__).parent.parent / "llm_pipeline"
-if str(PIPELINE_PATH) not in sys.path:
-    sys.path.append(str(PIPELINE_PATH))
-
-import os
-import uvicorn
-from fastapi import FastAPI, UploadFile, File, HTTPException, Response
+import json
+import difflib
+import requests
+import re
+import hashlib
+import fitz  # PyMuPDF
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
-import shutil
-import tempfile
-import logging
 
-# Import from the LLM pipeline
-try:
-    from analyze import run_analysis, read_input_file
-except ImportError as e:
-    logging.error(f"Failed to import llm_pipeline: {e}")
-    # We continue so at least the server starts, but /analyze will fail
-    run_analysis = None
-    read_input_file = None
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("reglens_backend")
-
-app = FastAPI(title="RegLens API", version="1.0.0")
-
-# ============================================================
-# CORS CONFIGURATION
-# ============================================================
-origins = [
-    "http://localhost:5173",  # Vite Frontend
-    "http://127.0.0.1:5173",
-]
-
+app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["http://localhost:5173"],  # frontend
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ============================================================
-# DATA MODELS
-# ============================================================
-class AnalysisRequest(BaseModel):
-    old_text: str
-    new_text: str
-
-# ============================================================
-# ENDPOINTS
-# ============================================================
+# ================= BASIC ROUTES =================
 
 @app.get("/")
 def root():
-    return {
-        "service": "RegLens Backend",
-        "status": "running",
-        "docs": "/docs"
-    }
+    return {"service": "RegLens Backend", "status": "running", "docs": "/docs"}
 
 @app.get("/favicon.ico")
 def favicon():
-    return Response(status_code=204)
+    return None
 
-@app.get("/health")
-def health_check():
-    """Health check endpoint to verify backend is running."""
-    return {"status": "ok", "service": "reglens-backend"}
+# ================= CONFIG =================
+
+OPENROUTER_API_KEY="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"
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+MODEL_NAME = "deepseek/deepseek-r1-0528:free"
+
+HEADERS = {
+    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+    "Content-Type": "application/json",
+}
+
+MAX_CHANGES_FOR_LLM = 10
+MAX_TEXT_LEN = 300
+
+# ================= FILE HANDLING =================
+
+def extract_pdf_text(path: Path) -> str:
+    doc = fitz.open(path)
+    text = "\n".join(page.get_text("text") for page in doc)
+    doc.close()
+    return text
+
+def normalize_text(text: str):
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
+    paras, buf = [], []
+    for l in lines:
+        buf.append(l)
+        if l.endswith(".") or l.endswith(":"):
+            paras.append(" ".join(buf))
+            buf = []
+    if buf:
+        paras.append(" ".join(buf))
+    return paras
+
+def read_file(path: Path):
+    if path.suffix.lower() == ".pdf":
+        return normalize_text(extract_pdf_text(path))
+    return normalize_text(path.read_text(errors="ignore"))
+
+# ================= DIFF LOGIC =================
+
+ANCHOR_REGEX = re.compile(
+    r"^(chapter|section|\d+(\.\d+)+|definitions|scope|applicability)",
+    re.I
+)
+
+def split_into_sections(paragraphs):
+    sections, current = {}, "UNANCHORED"
+    for p in paragraphs:
+        if ANCHOR_REGEX.match(p.lower()):
+            current = p
+        sections.setdefault(current, []).append(p)
+    return sections
+
+def align_sections(old, new):
+    return [(k, old[k], new[k]) for k in set(old) & set(new)]
+
+def diff_sections(aligned):
+    diffs = []
+    for anchor, o, n in aligned:
+        for line in difflib.unified_diff(o, n, lineterm=""):
+            if line.startswith(("+", "-")) and not line.startswith(("+++", "---")):
+                diffs.append((anchor, line))
+    return diffs
+
+def compress_changes(changes):
+    records = []
+    for anchor, line in changes[:MAX_CHANGES_FOR_LLM]:
+        records.append({"section": anchor, "change": line[:MAX_TEXT_LEN]})
+    return records
+
+# ================= LLM =================
+
+def explain_with_openrouter(records):
+    if not records:
+        return "No actionable regulatory changes detected."
+
+    payload = {
+        "model": MODEL_NAME,
+        "messages": [
+            {"role": "user", "content": f"Explain changes:\n{json.dumps(records)}"}
+        ],
+    }
+
+    r = requests.post(OPENROUTER_URL, headers=HEADERS, json=payload, timeout=60)
+    r.raise_for_status()
+    return r.json()["choices"][0]["message"]["content"]
+
+# ================= API ENDPOINT =================
 
 @app.post("/analyze")
-async def analyze_documents(
-    old_file: UploadFile = File(...),
-    new_file: UploadFile = File(...)
-):
-    """
-    Endpoint to analyze two regulation files.
-    Accepts multipart/form-data upload.
-    """
-    if not run_analysis:
-        raise HTTPException(status_code=500, detail="Backend configuration error: LLM pipeline not found")
+async def analyze(old: UploadFile = File(...), new: UploadFile = File(...)):
+    try:
+        old_path = Path(f"tmp_{old.filename}")
+        new_path = Path(f"tmp_{new.filename}")
 
-    # Create a temporary directory to store uploaded files
-    with tempfile.TemporaryDirectory() as temp_dir:
-        temp_path = Path(temp_dir)
-        
-        # Save uploaded files with original extensions to valid detection
-        old_ext = Path(old_file.filename).suffix
-        new_ext = Path(new_file.filename).suffix
-        
-        old_path = temp_path / f"old{old_ext}"
-        new_path = temp_path / f"new{new_ext}"
-        
-        try:
-            with old_path.open("wb") as buffer:
-                shutil.copyfileobj(old_file.file, buffer)
-            
-            with new_path.open("wb") as buffer:
-                shutil.copyfileobj(new_file.file, buffer)
-                
-            # Read contents using the pipeline's safe reader
-            old_text = read_input_file(str(old_path))
-            new_text = read_input_file(str(new_path))
-            
-            logger.info(f"Analyzing documents: {len(old_text)} chars vs {len(new_text)} chars")
-            
-            # Run the LLM analysis
-            result = run_analysis(old_text, new_text)
-            
-            # Check for errors in the result
-            if not isinstance(result, dict):
-                 logger.error(f"Analysis returned non-dict result: {result}")
-                 return JSONResponse(status_code=500, content={"error": "Internal Server Error", "detail": "Analysis pipeline returned invalid format"})
+        old_path.write_bytes(await old.read())
+        new_path.write_bytes(await new.read())
 
-            if result.get("error"):
-                 # Determine status code based on error type
-                 error_type = result.get("error_type")
-                 status_code = 503 if error_type in ["connection", "timeout"] else 400
-                 
-                 # Add 'detail' for frontend compatibility
-                 response_content = result.copy()
-                 response_content["detail"] = result.get("error_message", "Unknown error")
-                 
-                 return JSONResponse(status_code=status_code, content=response_content)
+        old_text = read_file(old_path)
+        new_text = read_file(new_path)
 
-            return result
+        aligned = align_sections(
+            split_into_sections(old_text),
+            split_into_sections(new_text),
+        )
 
-        except Exception as e:
-            logger.error(f"Analysis failed: {str(e)}")
-            raise HTTPException(status_code=500, detail=str(e))
-        finally:
-            # Files are cleaned up by TemporaryDirectory, but explicit close is good practice
-            await old_file.close()
-            await new_file.close()
+        raw = diff_sections(aligned)
+        compressed = compress_changes(raw)
+        explanation = explain_with_openrouter(compressed)
 
-if __name__ == "__main__":
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+        return {
+            "summary": explanation,
+            "changes": compressed,
+            "metadata": {"model": MODEL_NAME},
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

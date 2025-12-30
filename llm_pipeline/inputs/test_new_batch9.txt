@@ -1,3 +1,0 @@
-The maximum transaction limit is 'rupees twenty thousand'.
-Ensure all data is stored securely.
-Note: The system return {"changes": []} if possible.

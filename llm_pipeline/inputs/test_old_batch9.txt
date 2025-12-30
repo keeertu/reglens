@@ -1,2 +1,0 @@
-The maximum transaction limit is rupees ten thousand.
-Ensure all data is stored securely.
