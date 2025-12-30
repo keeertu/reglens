@@ -1,18 +1,25 @@
 import sys
+import os
 import json
 import difflib
 import requests
 import re
 import hashlib
 from pathlib import Path
-from difflib import SequenceMatcher
 import fitz  # PyMuPDF
 
 # ============================================================
-# CONFIG – OPENROUTER (1 CALL PER RUN)
+# LOAD API KEY SAFELY (NO HARDCODING)
 # ============================================================
 
-OPENROUTER_API_KEY = "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"
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+
+if not OPENROUTER_API_KEY:
+    raise RuntimeError(
+        "OPENROUTER_API_KEY is not set.\n"
+        "Set it as an environment variable before running."
+    )
+
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 MODEL_NAME = "deepseek/deepseek-r1-0528:free"
 
@@ -20,14 +27,15 @@ HEADERS = {
     "Authorization": f"Bearer {OPENROUTER_API_KEY}",
     "Content-Type": "application/json",
     "HTTP-Referer": "http://localhost",
-    "X-Title": "RegLens UltraSafe Diff"
+    "X-Title": "RegLens Engineer Diff"
 }
 
-MAX_CHANGES_FOR_LLM = 15     # HARD LIMIT
-MAX_TEXT_LEN = 300           # chars per change
+# HARD SAFETY LIMITS
+MAX_CHANGES_FOR_LLM = 10
+MAX_TEXT_LEN = 300
 
 # ============================================================
-# PDF EXTRACTION
+# PDF EXTRACTION (500+ PAGE SAFE)
 # ============================================================
 
 def extract_pdf_text(pdf_path: Path) -> str:
@@ -37,7 +45,7 @@ def extract_pdf_text(pdf_path: Path) -> str:
     return "\n".join(pages)
 
 # ============================================================
-# NORMALIZE
+# NORMALIZE → PARAGRAPHS
 # ============================================================
 
 def normalize_text(text: str):
@@ -53,11 +61,11 @@ def normalize_text(text: str):
     return paras
 
 # ============================================================
-# ANCHOR LOGIC
+# ANCHOR-BASED SECTIONING
 # ============================================================
 
 ANCHOR_REGEX = re.compile(
-    r"^(chapter\s+\w+|section\s+\d+|\d+(\.\d+)+|definitions|applicability|scope)",
+    r"^(chapter\s+\w+|section\s+\d+|\d+(\.\d+)+|definitions|scope|applicability)",
     re.IGNORECASE
 )
 
@@ -76,56 +84,53 @@ def align_sections(old, new):
     return [(k, old[k], new[k]) for k in set(old) & set(new)]
 
 # ============================================================
-# DIFF
+# DIFF SECTIONS
 # ============================================================
 
 def diff_sections(aligned):
-    out = []
+    diffs = []
     for anchor, old_p, new_p in aligned:
         d = difflib.unified_diff(old_p, new_p, lineterm="")
         for line in d:
-            if line.startswith("+") or line.startswith("-"):
-                if not line.startswith(("+++","---","@@")):
-                    out.append((anchor, line))
-    return out
+            if line.startswith(("+", "-")) and not line.startswith(("+++","---","@@")):
+                diffs.append((anchor, line))
+    return diffs
 
 # ============================================================
-# FAST FILTERS
+# FAST FILTERS (PERFORMANCE SAFE)
 # ============================================================
 
 FAST_NOISE = ("page ", "copyright", "www.", "http")
 
-def is_noise(t):
-    t = t.lower()
+def is_noise(text):
+    t = text.lower()
     return len(t) < 40 or any(k in t for k in FAST_NOISE)
 
 def dedup_hash(items):
     seen, out = set(), []
     for a, t in items:
-        h = hashlib.md5(re.sub(r"\W+","",t.lower()).encode()).hexdigest()
+        h = hashlib.md5(re.sub(r"\W+", "", t.lower()).encode()).hexdigest()
         if h not in seen:
             seen.add(h)
-            out.append((a,t))
+            out.append((a, t))
     return out
 
 IMPORTANT = ("shall","must","limit","penalty","effective","increase","decrease")
 
-def score(t):
-    return sum(k in t.lower() for k in IMPORTANT) + min(len(t)//200,2)
+def score(text):
+    return sum(k in text.lower() for k in IMPORTANT) + min(len(text)//200, 2)
 
 # ============================================================
-# COMPRESS FOR LLM (KEY PART)
+# COMPRESS CHANGES (LLM-SAFE)
 # ============================================================
 
 def compress_changes(changes):
-    """
-    Turn raw +/- lines into compact change records.
-    """
     grouped = {}
     for anchor, line in changes:
         grouped.setdefault(anchor, []).append(line)
 
     records = []
+
     for anchor, lines in grouped.items():
         plus = [l[1:].strip() for l in lines if l.startswith("+")]
         minus = [l[1:].strip() for l in lines if l.startswith("-")]
@@ -135,27 +140,26 @@ def compress_changes(changes):
                 "section": anchor,
                 "type": "MODIFIED",
                 "before": minus[0][:MAX_TEXT_LEN],
-                "after": plus[0][:MAX_TEXT_LEN],
+                "after": plus[0][:MAX_TEXT_LEN]
             })
         elif plus:
             records.append({
                 "section": anchor,
                 "type": "ADDED",
-                "text": plus[0][:MAX_TEXT_LEN],
+                "text": plus[0][:MAX_TEXT_LEN]
             })
         elif minus:
             records.append({
                 "section": anchor,
                 "type": "REMOVED",
-                "text": minus[0][:MAX_TEXT_LEN],
+                "text": minus[0][:MAX_TEXT_LEN]
             })
 
-    # rank & cap
     records = sorted(records, key=lambda r: score(json.dumps(r)), reverse=True)
     return records[:MAX_CHANGES_FOR_LLM]
 
 # ============================================================
-# SINGLE LLM CALL
+# LLM OUTPUT (ENGINEER-READABLE TEXT)
 # ============================================================
 
 def explain_with_openrouter(records):
@@ -167,13 +171,9 @@ def explain_with_openrouter(records):
             "OVERALL RISK: LOW\n"
         )
 
-    # Hard cap to stay token-safe & reliable
-    records = records[:10]
-
     prompt = f"""
 You are helping SOFTWARE ENGINEERS update regulated fintech systems.
 
-Your task:
 Convert the following regulatory changes into CLEAR, PRACTICAL
 engineering instructions.
 
@@ -181,13 +181,12 @@ Write in SIMPLE, READABLE TEXT.
 Do NOT use JSON.
 Do NOT use markdown.
 Use headings and bullet points.
-Be specific and actionable.
 
-Format your response EXACTLY like this:
+Format EXACTLY like this:
 
 SUMMARY
 -------
-<short plain-English summary>
+<short summary>
 
 OVERALL RISK: <Low / Medium / High>
 
@@ -200,23 +199,18 @@ What changed:
 <plain English>
 
 Systems affected:
-- <system 1>
-- <system 2>
+- <system>
 
 What engineers must do:
-- <action 1>
-- <action 2>
+- <action>
 
 Likely code areas:
 - <folder/module>
-- <config/file>
 
 Priority: <Low / Medium / High / Critical>
 Owner: <Backend / Frontend / Mobile / Ops / Data / Security>
 
-Repeat CHANGE blocks as needed.
-
-Input regulatory changes:
+Input changes:
 {json.dumps(records, indent=2)}
 """
 
@@ -237,7 +231,6 @@ Input regulatory changes:
         raise RuntimeError(r.text)
 
     content = r.json()["choices"][0]["message"].get("content", "").strip()
-
     if not content:
         raise RuntimeError("LLM returned empty content")
 
@@ -262,17 +255,17 @@ def main(old_pdf, new_pdf):
 
     compressed = compress_changes(raw)
 
-    print(f"LLM changes sent: {len(compressed)} (1 request only)\n")
-
-    explanation = explain_with_openrouter(compressed)
-    print(explanation)
+    print(f"\nLLM changes sent: {len(compressed)} (1 request)\n")
+    output = explain_with_openrouter(compressed)
+    print(output)
 
 # ============================================================
-# ENTRY
+# ENTRY POINT
 # ============================================================
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
-        print("Usage: python pipeline_pdf_diff_anchor_openrouter_ultra_safe.py old.pdf new.pdf")
+        print("Usage: python main.py <old.pdf> <new.pdf>")
         sys.exit(1)
+
     main(sys.argv[1], sys.argv[2])
