@@ -222,3 +222,69 @@ def create_error_response(
         "raw_output": raw_output,
         "retry_attempted": retry_attempted
     }
+
+import json
+import re
+import ast
+from typing import Optional
+
+def extract_json_from_response(response_text: str) -> Optional[dict]:
+    """
+    Attempt to extract and parse JSON from LLM response.
+    Handles cases where LLM wraps JSON in markdown code blocks.
+    Falls back to ast.literal_eval for malformed JSON (e.g., single quotes).
+    
+    Args:
+        response_text: Raw text response from LLM
+    
+    Returns:
+        Parsed JSON dict if successful, None if parsing fails
+    """
+    text = response_text.strip()
+    
+    # Attempt 1: Direct JSON parse
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    
+    # Attempt 2: Extract from markdown code blocks
+    # Matches ```json ... ``` or ``` ... ```
+    code_block_pattern = r'```(?:json)?\s*([\s\S]*?)\s*```'
+    matches = re.findall(code_block_pattern, text)
+    for match in matches:
+        try:
+            return json.loads(match.strip())
+        except json.JSONDecodeError:
+            continue
+    
+    # Attempt 3: Find JSON object boundaries
+    # Look for outermost { and }
+    first_brace = text.find('{')
+    last_brace = text.rfind('}')
+    
+    potential_json = None
+    if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+        potential_json = text[first_brace:last_brace + 1]
+        try:
+            return json.loads(potential_json)
+        except json.JSONDecodeError:
+            pass
+    
+    # Attempt 4: Safe fallback using ast.literal_eval
+    # This handles malformed JSON like single-quoted strings
+    # Only attempt if we found a dict-like structure
+    if potential_json and potential_json.strip().startswith('{'):
+        try:
+            # ast.literal_eval safely evaluates Python literals (no code execution)
+            result = ast.literal_eval(potential_json)
+            
+            # Accept only if result is a dict
+            if isinstance(result, dict):
+                # Normalize back to valid JSON by round-tripping through json.dumps
+                return json.loads(json.dumps(result, ensure_ascii=False))
+        except (ValueError, SyntaxError):
+            # ast.literal_eval failed
+            pass
+    
+    return None

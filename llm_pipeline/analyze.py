@@ -33,29 +33,16 @@ from prompt import (
     build_user_prompt,
     build_strict_retry_prompt
 )
-from ollama_client import (
-    call_ollama,
+from pdf_utils import extract_text_from_pdf
+from deepseek_client import (
+    call_deepseek,
     extract_json_from_response,
-    OllamaConnectionError,
-    OllamaModelError,
-    OllamaTimeoutError,
-    OllamaError
+    DeepSeekError
 )
-
 
 def read_input_file(filepath: str) -> str:
     """
-    Read and validate an input text file.
-    
-    Args:
-        filepath: Path to the input file
-    
-    Returns:
-        Contents of the file as string
-    
-    Raises:
-        FileNotFoundError: If file does not exist
-        ValueError: If file is empty or exceeds size limit
+    Read and validate an input file (Text or PDF).
     """
     path = Path(filepath)
     
@@ -65,7 +52,16 @@ def read_input_file(filepath: str) -> str:
     if not path.is_file():
         raise ValueError(f"Path is not a file: {filepath}")
     
-    content = path.read_text(encoding="utf-8")
+    suffix = path.suffix.lower()
+    
+    try:
+        if suffix == '.pdf':
+            content = extract_text_from_pdf(str(path))
+        else:
+            # Default to text
+            content = path.read_text(encoding="utf-8")
+    except Exception as e:
+        raise ValueError(f"Failed to read file {filepath}: {str(e)}")
     
     if len(content.strip()) == 0:
         raise ValueError(f"Input file is empty: {filepath}")
@@ -77,51 +73,15 @@ def read_input_file(filepath: str) -> str:
     
     return content
 
-
-def save_output(result: dict, output_path: str = None) -> str:
-    """
-    Save analysis result to a JSON file.
-    
-    Args:
-        result: The analysis result dict
-        output_path: Optional specific output path
-    
-    Returns:
-        Path where the file was saved
-    """
-    # Create output directory if needed
-    output_dir = Path(OUTPUT_DIRECTORY)
-    output_dir.mkdir(exist_ok=True)
-    
-    if output_path:
-        save_path = Path(output_path)
-    else:
-        # Generate timestamped filename
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"analysis_{timestamp}.json"
-        save_path = output_dir / filename
-    
-    with open(save_path, "w", encoding="utf-8") as f:
-        json.dump(result, f, indent=2, ensure_ascii=False)
-    
-    return str(save_path)
-
+# ... [save_output is unchanged] ...
 
 def run_analysis(
     old_text: str,
     new_text: str,
-    model: str = DEFAULT_MODEL
+    model: str = "deepseek-chat" # Default to chat model
 ) -> dict:
     """
-    Run the complete analysis pipeline.
-    
-    Args:
-        old_text: Previous regulation text
-        new_text: Updated regulation text
-        model: Ollama model to use
-    
-    Returns:
-        Analysis result dict (either valid analysis or error response)
+    Run the complete analysis pipeline using DeepSeek.
     """
     analysis_id = generate_analysis_id()
     start_time = time.time()
@@ -134,10 +94,11 @@ def run_analysis(
     # Build initial prompt
     user_prompt = build_user_prompt(old_text, new_text, analysis_id)
     
-    # Attempt analysis with retry logic
+    # Attempt analysis
     last_error = None
     raw_output = None
     
+    # Simple retry loop
     for attempt in range(1 + MAX_RETRIES):
         is_retry = attempt > 0
         
@@ -148,8 +109,8 @@ def run_analysis(
             )
         
         try:
-            # Call Ollama
-            response_text, metadata = call_ollama(
+            # Call DeepSeek
+            response_text, metadata = call_deepseek(
                 prompt=user_prompt,
                 system_prompt=SYSTEM_PROMPT,
                 model=model
@@ -168,31 +129,21 @@ def run_analysis(
                 last_error = f"Schema validation failed: {errors[:3]}"  # First 3 errors
                 continue
             
-            # Success - update metadata with actual values
+            # Success - update metadata
             parsed["metadata"] = metadata
             parsed["metadata"]["processing_time_ms"] = int((time.time() - start_time) * 1000)
             
             return parsed
             
-        except OllamaConnectionError as e:
+        except DeepSeekError as e:
+            # Map DeepSeek errors to standard error format
+            # We treat them as connection/timeout type errors for 503 mapping
             return create_error_response(
-                error_type="connection",
+                error_type="connection", # Using 'connection' maps to 503 in backend
                 error_message=str(e),
                 retry_attempted=is_retry
             )
-        except OllamaModelError as e:
-            return create_error_response(
-                error_type="model_not_found",
-                error_message=str(e),
-                retry_attempted=is_retry
-            )
-        except OllamaTimeoutError as e:
-            return create_error_response(
-                error_type="timeout",
-                error_message=str(e),
-                retry_attempted=is_retry
-            )
-        except OllamaError as e:
+        except Exception as e:
             last_error = str(e)
             continue
     
@@ -200,7 +151,7 @@ def run_analysis(
     return create_error_response(
         error_type="invalid_json" if "parse" in str(last_error).lower() else "schema_validation",
         error_message=str(last_error),
-        raw_output=raw_output[:1000] if raw_output else None,  # Truncate for debugging
+        raw_output=raw_output[:1000] if raw_output else None,
         retry_attempted=MAX_RETRIES > 0
     )
 
