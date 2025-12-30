@@ -23,18 +23,20 @@ RegLens follows a modern client-server architecture:
 
 ```mermaid
 graph TD
-    User([Compliance Officer]) -->|Uploads Docs| Frontend[Frontend (React + Vite)]
-    Frontend -->|REST API| Backend[Backend (FastAPI)]
-    
-    subgraph "Backend Services"
-        Backend -->|Extract Text| PDF[PyMuPDF Processor]
-        Backend -->|Compute Diffs| Diff[Semantic Diff Engine]
-        Backend -->|Analyze Context| LLM[DeepSeek LLM (OpenRouter)]
+    User[Compliance Officer] --> Uploads[Uploads Docs]
+    Uploads --> Frontend["Frontend (React + Vite)"]
+    Frontend --> Backend["Backend (FastAPI)"]
+
+    subgraph BackendServices["Backend Services"]
+        Backend --> PDF["PDF Processor (PyMuPDF)"]
+        Backend --> Diff["Semantic Diff Engine"]
+        Backend --> LLM["LLM (DeepSeek via OpenRouter)"]
     end
-    
-    LLM -->|Explanations| Backend
-    Diff -->|Changes| Backend
-    Backend -->|JSON Response| Frontend
+
+    LLM --> Backend
+    Diff --> Backend
+    Backend --> Frontend
+
 ```
 
 ### Tech Stack
