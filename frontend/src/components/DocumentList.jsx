@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { FileText, ArrowRight, Loader2 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { api } from '../services/api';
 
 export function DocumentList({ onSelectDocument, onError }) {
@@ -18,7 +19,7 @@ export function DocumentList({ onSelectDocument, onError }) {
             // Contract says GET /documents/list, usually returns a list or object with list.
             // Let's assume array or { documents: [] } property. 
             // Safe check:
-            const docs = Array.isArray(data) ? data : (data.documents || []);
+            const docs = Array.isArray(data) ? data : (data.documents || data.files || []);
             setDocuments(docs);
         }
     };
@@ -43,30 +44,51 @@ export function DocumentList({ onSelectDocument, onError }) {
         );
     }
 
+    const container = {
+        hidden: { opacity: 0 },
+        show: {
+            opacity: 1,
+            transition: {
+                staggerChildren: 0.05
+            }
+        }
+    };
+
+    const item = {
+        hidden: { opacity: 0, y: 20 },
+        show: { opacity: 1, y: 0 }
+    };
+
     return (
-        <div className="space-y-4">
-            <h3 className="text-xl font-semibold text-white mb-4">Uploaded Documents</h3>
+        <motion.div
+            className="space-y-4"
+            variants={container}
+            initial="hidden"
+            animate="show"
+        >
+            <h3 className="text-xl font-semibold text-foreground mb-4">Uploaded Documents</h3>
             <div className="grid gap-3">
                 {documents.map((doc, idx) => (
-                    <button
+                    <motion.button
                         key={idx}
-                        onClick={() => onSelectDocument(doc)} // doc might be object or string filename
-                        className="flex items-center justify-between p-4 bg-slate-800/50 hover:bg-slate-800 border border-slate-700 rounded-xl transition-all group text-left"
+                        variants={item}
+                        onClick={() => onSelectDocument(doc)}
+                        className="flex items-center justify-between p-4 bg-card hover:bg-accent border border-border rounded-xl transition-all group text-left shadow-sm hover:shadow-md"
                     >
                         <div className="flex items-center space-x-3">
-                            <div className="p-2 bg-blue-500/10 rounded-lg">
-                                <FileText className="w-5 h-5 text-blue-400" />
+                            <div className="p-2 bg-primary/10 rounded-lg">
+                                <FileText className="w-5 h-5 text-primary" />
                             </div>
                             <div>
-                                <p className="font-medium text-slate-200">
+                                <p className="font-medium text-foreground">
                                     {typeof doc === 'string' ? doc : doc.filename}
                                 </p>
                             </div>
                         </div>
-                        <ArrowRight className="w-5 h-5 text-slate-500 group-hover:text-blue-400 transition-colors" />
-                    </button>
+                        <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                    </motion.button>
                 ))}
             </div>
-        </div>
+        </motion.div>
     );
 }
