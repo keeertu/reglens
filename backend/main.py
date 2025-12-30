@@ -1,264 +1,148 @@
-import os
-import shutil
-import json
-import datetime
-import uuid
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from pathlib import Path
-from urllib.parse import unquote
-from typing import List, Optional, Dict, Any
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Path as PathParam, Header, Depends
-from pydantic import BaseModel
+import json
+import difflib
+import requests
+import re
+import hashlib
+import fitz  # PyMuPDF
+from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="RegLens MVP")
+app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],  # frontend
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# Configuration
-DATA_DIR = Path("./data")
-STATE_DIR = Path("./state")
-AUDIT_LOG_FILE = Path("./audit.log")
-ANALYSIS_FILE = STATE_DIR / "analysis_results.json"
-TASKS_FILE = STATE_DIR / "tasks.json"
+# ================= BASIC ROUTES =================
 
-# Initialization
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-STATE_DIR.mkdir(parents=True, exist_ok=True)
+@app.get("/")
+def root():
+    return {"service": "RegLens Backend", "status": "running", "docs": "/docs"}
 
-# Helper Functions
-def log_audit(action: str, payload: dict, user: str = "anonymous"):
-    timestamp = datetime.datetime.now().isoformat()
-    # Inject user into payload to preserve "timestamp | action | payload" format
-    payload_with_user = payload.copy()
-    payload_with_user["user"] = user
-    
-    entry = f"{timestamp} | {action} | {json.dumps(payload_with_user)}\n"
-    with open(AUDIT_LOG_FILE, "a") as f:
-        f.write(entry)
+@app.get("/favicon.ico")
+def favicon():
+    return None
 
-def save_json(path: Path, data: Any):
-    # Atomic write: write to tmp then rename
-    tmp_path = path.with_suffix(".tmp")
-    try:
-        with open(tmp_path, "w") as f:
-            json.dump(data, f, indent=2)
-        os.replace(tmp_path, path)
-    except Exception as e:
-        if tmp_path.exists():
-            os.remove(tmp_path)
-        raise e
+# ================= CONFIG =================
 
-def load_json(path: Path, default_value: Any) -> Any:
-    # Robust read with auto-recovery
-    if not path.exists():
-        save_json(path, default_value)
-        return default_value
-    
-    try:
-        with open(path, "r") as f:
-            return json.load(f)
-    except Exception as e:
-        # Log corruption and reset
-        log_audit("state_corruption_detected", {
-            "file": str(path), 
-            "error": str(e),
-            "action": "reset_to_default"
-        }, user="system")
-        save_json(path, default_value)
-        return default_value
+# OPENROUTER_API_KEY= ""
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+MODEL_NAME = "deepseek/deepseek-r1-0528:free"
 
-# Initial State Checks
-if not ANALYSIS_FILE.exists():
-    save_json(ANALYSIS_FILE, {})
+HEADERS = {
+    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+    "Content-Type": "application/json",
+}
 
-if not TASKS_FILE.exists():
-    save_json(TASKS_FILE, [])
+MAX_CHANGES_FOR_LLM = 10
+MAX_TEXT_LEN = 300
 
-# Dependencies
-async def get_current_user(x_demo_user: Optional[str] = Header(None, alias="X-Demo-User")) -> str:
-    return x_demo_user or "anonymous"
+# ================= FILE HANDLING =================
 
-# Models
-class ApprovalRequest(BaseModel):
-    approved_by: str
+def extract_pdf_text(path: Path) -> str:
+    doc = fitz.open(path)
+    text = "\n".join(page.get_text("text") for page in doc)
+    doc.close()
+    return text
 
-# Endpoints
-@app.get("/health")
-async def health_check(user: str = Depends(get_current_user)):
-    log_audit("health_check", {"status": "ok"}, user=user)
-    return {"status": "ok"}
+def normalize_text(text: str):
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
+    paras, buf = [], []
+    for l in lines:
+        buf.append(l)
+        if l.endswith(".") or l.endswith(":"):
+            paras.append(" ".join(buf))
+            buf = []
+    if buf:
+        paras.append(" ".join(buf))
+    return paras
 
-@app.post("/documents/upload")
-async def upload_document(
-    file: UploadFile = File(...),
-    title: str = Form(...),
-    version: str = Form(...),
-    user: str = Depends(get_current_user)
-):
-    try:
-        # P0 FIX: Path Traversal Protection
-        safe_filename = os.path.basename(file.filename)
-        file_path = DATA_DIR / safe_filename
-        
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        
-        log_audit("upload_document", {
-            "original_filename": file.filename,
-            "filename": safe_filename,
-            "title": title,
-            "version": version,
-            "path": str(file_path)
-        }, user=user)
-        return {"message": "File uploaded successfully", "filename": safe_filename}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+def read_file(path: Path):
+    if path.suffix.lower() == ".pdf":
+        return normalize_text(extract_pdf_text(path))
+    return normalize_text(path.read_text(errors="ignore"))
 
-@app.get("/documents/list")
-async def list_documents(user: str = Depends(get_current_user)):
-    files = []
-    if DATA_DIR.exists():
-        files = [f.name for f in DATA_DIR.iterdir() if f.is_file()]
-    log_audit("list_documents", {"count": len(files)}, user=user)
-    return {"files": files}
+# ================= DIFF LOGIC =================
 
-@app.get("/changes/mock")
-async def get_mock_changes(user: str = Depends(get_current_user)):
-    changes = [
-        {
-            "regulation_id": "RBI-KYC-2025-01",
-            "title": "Master Direction - KYC (Amendment)",
-            "section": "Sec 12.3 (e-KYC Limits)",
-            "change_type": "Modified",
-            "risk_level": "High",
-            "summary": "Limit for OTP-based e-KYC enhanced from Rs. 60,000 to Rs. 1,00,000."
-        },
-        {
-            "regulation_id": "RBI-SRO-2025-04",
-            "title": "Fintech SRO Framework",
-            "section": "Membership Criteria",
-            "change_type": "Added",
-            "risk_level": "Medium",
-            "summary": "Mandates 30% membership from payment aggregators."
-        }
-    ]
-    log_audit("get_changes_mock", {"returned_count": len(changes)}, user=user)
-    return {"changes": changes}
+ANCHOR_REGEX = re.compile(
+    r"^(chapter|section|\d+(\.\d+)+|definitions|scope|applicability)",
+    re.I
+)
 
-@app.get("/analyze/{filename}")
-async def analyze_document(
-    filename: str = PathParam(..., description="Name of the file to analyze"),
-    user: str = Depends(get_current_user)
-):
-    decoded_filename = os.path.basename(unquote(filename))
-    file_path = DATA_DIR / decoded_filename
-    
-    if not file_path.exists():
-        log_audit("analyze_document_failed", {"filename": decoded_filename, "reason": "file_not_found"}, user=user)
-        raise HTTPException(status_code=404, detail=f"File {decoded_filename} not found.")
+def split_into_sections(paragraphs):
+    sections, current = {}, "UNANCHORED"
+    for p in paragraphs:
+        if ANCHOR_REGEX.match(p.lower()):
+            current = p
+        sections.setdefault(current, []).append(p)
+    return sections
 
-    # Mock Analysis Logic
-    analysis = {
-        "document_name": decoded_filename,
-        "regulator": "RBI",
-        "detected_changes": [
-            {
-                "section": "Para 4.2",
-                "original_text": "Banks must report fraud within 7 days.",
-                "new_text": "Banks must report fraud within 24 hours.",
-                "implication": "Operational SLA tightening."
-            }
+def align_sections(old, new):
+    return [(k, old[k], new[k]) for k in set(old) & set(new)]
+
+def diff_sections(aligned):
+    diffs = []
+    for anchor, o, n in aligned:
+        for line in difflib.unified_diff(o, n, lineterm=""):
+            if line.startswith(("+", "-")) and not line.startswith(("+++", "---")):
+                diffs.append((anchor, line))
+    return diffs
+
+def compress_changes(changes):
+    records = []
+    for anchor, line in changes[:MAX_CHANGES_FOR_LLM]:
+        records.append({"section": anchor, "change": line[:MAX_TEXT_LEN]})
+    return records
+
+# ================= LLM =================
+
+def explain_with_openrouter(records):
+    if not records:
+        return "No actionable regulatory changes detected."
+
+    payload = {
+        "model": MODEL_NAME,
+        "messages": [
+            {"role": "user", "content": f"Explain changes:\n{json.dumps(records)}"}
         ],
-        "recommended_tasks": [
-            {
-                "team": "Compliance",
-                "action": "Update Fraud Reporting SLA Policy",
-                "priority": "Critical"
-            },
-            {
-                "team": "Engineering",
-                "action": "Configure 24h alert triggers in transaction monitoring system",
-                "priority": "High"
-            }
-        ],
-        "confidence_note": "AI-assisted analysis. Requires human verification.",
-        "analysis_timestamp": datetime.datetime.now().isoformat()
     }
 
-    # Persist Analysis (Robust)
-    all_analysis = load_json(ANALYSIS_FILE, {})
-    all_analysis[decoded_filename] = analysis
-    save_json(ANALYSIS_FILE, all_analysis)
-    
-    log_audit("analyze_document", {"filename": decoded_filename, "status": "persisted"}, user=user)
-    return analysis
+    r = requests.post(OPENROUTER_URL, headers=HEADERS, json=payload, timeout=60)
+    r.raise_for_status()
+    return r.json()["choices"][0]["message"]["content"]
 
-@app.get("/tasks/mock")
-async def get_mock_tasks(user: str = Depends(get_current_user)):
-    # Load persistence files (Robust)
-    all_analysis = load_json(ANALYSIS_FILE, {})
-    current_tasks = load_json(TASKS_FILE, [])
-    
-    existing_task_keys = set((t["filename"], t["description"]) for t in current_tasks)
-    new_tasks_added = False
+# ================= API ENDPOINT =================
 
-    # Generate tasks from Analysis
-    for filename, analysis_data in all_analysis.items():
-        for rec_task in analysis_data.get("recommended_tasks", []):
-            task_key = (filename, rec_task["action"])
-            
-            if task_key not in existing_task_keys:
-                new_task = {
-                    "task_id": f"TSK-{uuid.uuid4().hex[:8].upper()}",
-                    "filename": filename,
-                    "description": rec_task["action"],
-                    "team": rec_task["team"],
-                    "status": "Pending",
-                    "priority": rec_task["priority"],
-                    "created_at": datetime.datetime.now().isoformat()
-                }
-                current_tasks.append(new_task)
-                existing_task_keys.add(task_key)
-                new_tasks_added = True
+@app.post("/analyze")
+async def analyze(old: UploadFile = File(...), new: UploadFile = File(...)):
+    try:
+        old_path = Path(f"tmp_{old.filename}")
+        new_path = Path(f"tmp_{new.filename}")
 
-    if new_tasks_added:
-        save_json(TASKS_FILE, current_tasks)
-        log_audit("tasks_generated", {"count": len(current_tasks), "status": "updated"}, user=user)
-    else:
-        log_audit("tasks_viewed", {"count": len(current_tasks), "status": "no_change"}, user=user)
+        old_path.write_bytes(await old.read())
+        new_path.write_bytes(await new.read())
 
-    return {"tasks": current_tasks}
+        old_text = read_file(old_path)
+        new_text = read_file(new_path)
 
-@app.post("/tasks/{task_id}/approve")
-async def approve_task(
-    task_id: str, 
-    request: ApprovalRequest,
-    user: str = Depends(get_current_user)
-):
-    current_tasks = load_json(TASKS_FILE, [])
-    task_found = False
-    updated_task = None
+        aligned = align_sections(
+            split_into_sections(old_text),
+            split_into_sections(new_text),
+        )
 
-    for task in current_tasks:
-        if task["task_id"] == task_id:
-            task["status"] = "Approved"
-            task["approved_by"] = request.approved_by
-            task["approved_at"] = datetime.datetime.now().isoformat()
-            task_found = True
-            updated_task = task
-            break
-    
-    if not task_found:
-        log_audit("approve_task_failed", {"task_id": task_id, "reason": "not_found"}, user=user)
-        raise HTTPException(status_code=404, detail="Task not found")
+        raw = diff_sections(aligned)
+        compressed = compress_changes(raw)
+        explanation = explain_with_openrouter(compressed)
 
-    save_json(TASKS_FILE, current_tasks)
+        return {
+            "summary": explanation,
+            "changes": compressed,
+            "metadata": {"model": MODEL_NAME},
+        }
 
-    log_audit("approve_task", {
-        "task_id": task_id,
-        "approved_by": request.approved_by,
-        "action": "task_approved"
-    }, user=user)
-    
-    return updated_task
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
