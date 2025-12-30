@@ -1,131 +1,67 @@
-import React, { useEffect, useState } from 'react';
-import { Check, Clock, AlertTriangle, Loader2 } from 'lucide-react';
-import { motion } from 'framer-motion';
-import { api } from '../services/api';
+import React from 'react';
+import { CheckCircle2, ShieldCheck, Clock } from 'lucide-react';
+import { Card, CardContent } from './ui/card';
+import { Badge } from './ui/badge';
 
-export function TaskDashboard({ onError }) {
-    const [tasks, setTasks] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [approvingId, setApprovingId] = useState(null);
-
-    const fetchTasks = async () => {
-        setIsLoading(true);
-        const { data, error } = await api.getTasks();
-        setIsLoading(false);
-
-        if (error) {
-            onError(error);
-        } else if (data) {
-            // Assume data is array or { tasks: [] }
-            const tasksList = Array.isArray(data) ? data : (data.tasks || []);
-            setTasks(tasksList);
-        }
-    };
-
-    useEffect(() => {
-        fetchTasks();
-    }, []);
-
-    const handleApprove = async (taskId) => {
-        setApprovingId(taskId);
-        const { error } = await api.approveTask(taskId);
-        setApprovingId(null);
-
-        if (error) {
-            onError(error);
-        } else {
-            // Optimistically update or refetch
-            // Let's refetch to be safe with state
-            fetchTasks();
-        }
-    };
-
-    if (isLoading && tasks.length === 0) {
+export const TaskDashboard = ({ analysis }) => {
+    if (!analysis) {
         return (
-            <div className="flex justify-center p-12">
-                <Loader2 className="w-8 h-8 text-primary animate-spin" />
+            <div className="text-center py-20 text-muted-foreground">
+                Run an analysis to generate compliance tasks.
             </div>
         );
     }
+
+    const tasks = analysis.tasks || [];
 
     if (tasks.length === 0) {
         return (
-            <div className="text-center p-12 text-muted-foreground bg-muted/30 rounded-xl border border-border">
-                <p>No actionable tasks at the moment.</p>
+            <div className="text-center py-20 bg-muted/20 rounded-lg">
+                No tasks generated from this regulation update.
             </div>
         );
     }
 
-    const container = {
-        hidden: { opacity: 0 },
-        show: {
-            opacity: 1,
-            transition: {
-                staggerChildren: 0.1
-            }
-        }
-    };
-
-    const item = {
-        hidden: { opacity: 0, x: -20 },
-        show: { opacity: 1, x: 0 }
-    };
-
     return (
-        <motion.div
-            className="space-y-4"
-            variants={container}
-            initial="hidden"
-            animate="show"
-        >
-            <h3 className="text-xl font-semibold text-foreground mb-4">Pending Approvals</h3>
-            <div className="grid gap-4">
-                {tasks.map((task) => (
-                    <motion.div
-                        key={task.id}
-                        variants={item}
-                        className="p-5 bg-card border border-border rounded-xl flex items-center justify-between shadow-sm hover:shadow-md transition-all"
-                    >
-                        <div className="space-y-1">
-                            <div className="flex items-center space-x-2">
-                                <span className={`px-2 py-0.5 text-xs rounded-full border ${task.priority === 'High' ? 'bg-destructive/10 border-destructive/20 text-destructive' :
-                                    'bg-primary/10 border-primary/20 text-primary'
-                                    }`}>
-                                    {task.priority || 'Medium'} Priority
-                                </span>
-                                <span className="text-xs text-muted-foreground flex items-center">
-                                    <Clock className="w-3 h-3 mr-1" />
-                                    {task.date || 'Today'}
+        <div className="space-y-4">
+            {tasks.map((task) => (
+                <Card key={task.id}>
+                    <CardContent className="p-6 flex justify-between items-start">
+                        <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                                <Badge>{task.priority}</Badge>
+                                <span className="text-xs text-muted-foreground">
+                                    {task.id}
                                 </span>
                             </div>
-                            <h4 className="font-medium text-foreground">{task.description || "Review Document Analysis"}</h4>
-                            <p className="text-sm text-muted-foreground">ID: {task.id}</p>
+
+                            <h3 className="font-semibold text-lg">
+                                {task.title}
+                            </h3>
+
+                            <p className="text-sm text-muted-foreground">
+                                {task.description}
+                            </p>
+
+                            <div className="flex gap-4 text-sm text-muted-foreground mt-2">
+                                <span className="flex items-center gap-1">
+                                    <ShieldCheck className="h-4 w-4" />
+                                    {task.owner}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                    <Clock className="h-4 w-4" />
+                                    {task.change_type}
+                                </span>
+                            </div>
                         </div>
 
-                        {task.status === 'approved' ? (
-                            <div className="flex items-center space-x-2 text-green-500 bg-green-500/10 px-4 py-2 rounded-lg border border-green-500/20">
-                                <Check className="w-4 h-4" />
-                                <span className="text-sm font-medium">Approved</span>
-                            </div>
-                        ) : (
-                            <button
-                                onClick={() => handleApprove(task.id)}
-                                disabled={approvingId === task.id}
-                                className="flex items-center space-x-2 px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white rounded-lg transition-colors text-sm font-medium shadow-sm"
-                            >
-                                {approvingId === task.id ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                ) : (
-                                    <>
-                                        <Check className="w-4 h-4" />
-                                        <span>Approve</span>
-                                    </>
-                                )}
-                            </button>
-                        )}
-                    </motion.div>
-                ))}
-            </div>
-        </motion.div>
+                        <div className="text-green-600 flex items-center gap-1">
+                            <CheckCircle2 className="h-5 w-5" />
+                            Pending
+                        </div>
+                    </CardContent>
+                </Card>
+            ))}
+        </div>
     );
-}
+};
