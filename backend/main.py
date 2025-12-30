@@ -6,10 +6,21 @@ import uuid
 from pathlib import Path
 from urllib.parse import unquote
 from typing import List, Optional, Dict, Any
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Path as PathParam, Header, Depends
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Path as PathParam, Header, Depends, Response
 from pydantic import BaseModel
 
 app = FastAPI(title="RegLens MVP")
+
+# CORS Configuration
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Configuration
 DATA_DIR = Path("./data")
@@ -80,6 +91,18 @@ class ApprovalRequest(BaseModel):
     approved_by: str
 
 # Endpoints
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return Response(status_code=204)
+
+@app.get("/")
+async def root():
+    return {
+        "status": "online",
+        "service": "RegLens API",
+        "documentation_url": "/docs"
+    }
+
 @app.get("/health")
 async def health_check(user: str = Depends(get_current_user)):
     log_audit("health_check", {"status": "ok"}, user=user)

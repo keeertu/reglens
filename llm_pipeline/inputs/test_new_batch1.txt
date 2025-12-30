@@ -1,0 +1,3 @@
+The aggregate balance of all deposit accounts shall not exceed rupees one lakh.
+Credits in a financial year shall not exceed rupees two lakh.
+The account shall become non-operational if Customer Due Diligence is not completed within one year.

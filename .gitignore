@@ -1,11 +1,25 @@
 # Python
 __pycache__/
 *.pyc
-
-# Virtual environment
 venv/
+backend/venv/
+.env
+
+# Node
+node_modules/
+frontend/node_modules/
+dist/
+
+# LLM / runtime outputs
+outputs/
+llm_pipeline/outputs/
+state/
+data/
 
 # Backend runtime artifacts
 backend/data/
 backend/state/
 backend/audit.log
+
+# OS junk
+.DS_Store
