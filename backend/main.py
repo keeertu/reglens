@@ -29,7 +29,7 @@ def favicon():
 
 # ================= CONFIG =================
 
-OPENROUTER_API_KEY="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"
+OPENROUTER_API_KEY="xyz"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 MODEL_NAME = "deepseek/deepseek-r1-0528:free"
 
