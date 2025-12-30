@@ -9,7 +9,7 @@ if str(PIPELINE_PATH) not in sys.path:
 
 import os
 import uvicorn
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -59,6 +59,18 @@ class AnalysisRequest(BaseModel):
 # ENDPOINTS
 # ============================================================
 
+@app.get("/")
+def root():
+    return {
+        "service": "RegLens Backend",
+        "status": "running",
+        "docs": "/docs"
+    }
+
+@app.get("/favicon.ico")
+def favicon():
+    return Response(status_code=204)
+
 @app.get("/health")
 def health_check():
     """Health check endpoint to verify backend is running."""
@@ -80,9 +92,12 @@ async def analyze_documents(
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
         
-        # Save uploaded files
-        old_path = temp_path / "old.txt"
-        new_path = temp_path / "new.txt"
+        # Save uploaded files with original extensions to valid detection
+        old_ext = Path(old_file.filename).suffix
+        new_ext = Path(new_file.filename).suffix
+        
+        old_path = temp_path / f"old{old_ext}"
+        new_path = temp_path / f"new{new_ext}"
         
         try:
             with old_path.open("wb") as buffer:
@@ -101,11 +116,20 @@ async def analyze_documents(
             result = run_analysis(old_text, new_text)
             
             # Check for errors in the result
+            if not isinstance(result, dict):
+                 logger.error(f"Analysis returned non-dict result: {result}")
+                 return JSONResponse(status_code=500, content={"error": "Internal Server Error", "detail": "Analysis pipeline returned invalid format"})
+
             if result.get("error"):
                  # Determine status code based on error type
-                 error_type = result.get("error", {}).get("type")
+                 error_type = result.get("error_type")
                  status_code = 503 if error_type in ["connection", "timeout"] else 400
-                 return JSONResponse(status_code=status_code, content=result)
+                 
+                 # Add 'detail' for frontend compatibility
+                 response_content = result.copy()
+                 response_content["detail"] = result.get("error_message", "Unknown error")
+                 
+                 return JSONResponse(status_code=status_code, content=response_content)
 
             return result
 

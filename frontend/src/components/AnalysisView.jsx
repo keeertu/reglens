@@ -3,6 +3,9 @@ import { ArrowLeft, ShieldAlert, CheckCircle, Loader2 } from 'lucide-react';
 import { api } from '../services/api';
 
 export function AnalysisView({ analysisResult, onBack }) {
+    // Log the data for debugging
+    console.log("Analysis Data:", analysisResult);
+
     // analysisResult is passed directly, no need to fetch
     const analysis = analysisResult;
 
@@ -36,24 +39,64 @@ export function AnalysisView({ analysisResult, onBack }) {
 
                 <div className="space-y-8">
                     {/* Summary Section */}
-                    {analysis.summary_of_changes && (
+                    {analysis.summary && (
                         <div className="space-y-2">
                             <h3 className="text-lg font-semibold text-card-foreground">Executive Summary</h3>
                             <div className="p-4 rounded-xl bg-secondary/30 border border-border text-foreground leading-relaxed">
-                                {analysis.summary_of_changes}
+                                {analysis.summary}
                             </div>
                         </div>
                     )}
 
+                    {/* Changes Section */}
+                    <div className="space-y-4">
+                        <h3 className="text-lg font-semibold text-card-foreground flex items-center gap-2">
+                            <ShieldAlert className="w-5 h-5 text-primary" />
+                            Detected Changes
+                        </h3>
+
+                        {(analysis.changes || []).length === 0 ? (
+                            <div className="p-8 text-center border border-dashed border-border rounded-xl text-muted-foreground bg-secondary/5">
+                                <p>No significant changes detected.</p>
+                            </div>
+                        ) : (
+                            <div className="grid gap-4">
+                                {analysis.changes.map((change, idx) => (
+                                    <div key={idx} className="p-4 border border-border rounded-lg bg-secondary/10 hover:border-primary/30 transition-colors">
+                                        <div className="flex justify-between items-start mb-1">
+                                            <div className="flex items-center gap-2">
+                                                <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${change.change_type === 'addition' ? 'text-green-500 border-green-500/20 bg-green-500/10' :
+                                                        change.change_type === 'removal' ? 'text-red-500 border-red-500/20 bg-red-500/10' :
+                                                            'text-blue-500 border-blue-500/20 bg-blue-500/10'
+                                                    }`}>
+                                                    {change.change_type}
+                                                </span>
+                                                <h4 className="font-medium text-foreground text-sm">
+                                                    Risk: <span className={
+                                                        change.risk_level === 'critical' ? 'text-red-600 font-bold' :
+                                                            change.risk_level === 'high' ? 'text-orange-500' :
+                                                                'text-muted-foreground'
+                                                    }>{change.risk_level}</span>
+                                                </h4>
+                                            </div>
+                                        </div>
+                                        <p className="text-sm text-foreground mt-2">{change.description}</p>
+                                        <p className="text-xs text-muted-foreground mt-2 italic">Impact: {change.business_impact}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
                     {/* Actionable Tasks (Cards) */}
-                    {(analysis.actionable_steps || []).length > 0 && (
+                    {(analysis.suggested_tasks || []).length > 0 && (
                         <div className="space-y-4">
                             <h3 className="text-lg font-semibold text-card-foreground flex items-center gap-2">
                                 <CheckCircle className="w-5 h-5 text-primary" />
                                 Suggested Compliance Tasks
                             </h3>
                             <div className="grid gap-4 md:grid-cols-2">
-                                {analysis.actionable_steps.map((step, idx) => (
+                                {analysis.suggested_tasks.map((step, idx) => (
                                     <div key={idx} className="group p-5 rounded-xl bg-card border border-border hover:border-primary/50 hover:shadow-lg transition-all duration-300">
                                         <div className="flex justify-between items-start mb-2">
                                             <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-sm">
@@ -61,18 +104,18 @@ export function AnalysisView({ analysisResult, onBack }) {
                                             </span>
                                             {step.priority && (
                                                 <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded-full border ${step.priority.toLowerCase() === 'high' ? 'text-red-500 border-red-500/20 bg-red-500/10' :
-                                                        step.priority.toLowerCase() === 'medium' ? 'text-yellow-500 border-yellow-500/20 bg-yellow-500/10' :
-                                                            'text-blue-500 border-blue-500/20 bg-blue-500/10'
+                                                    step.priority.toLowerCase() === 'medium' ? 'text-yellow-500 border-yellow-500/20 bg-yellow-500/10' :
+                                                        'text-blue-500 border-blue-500/20 bg-blue-500/10'
                                                     }`}>
                                                     {step.priority}
                                                 </span>
                                             )}
                                         </div>
-                                        <h4 className="font-semibold text-foreground mb-2">{step.action || "Required Action"}</h4>
+                                        <h4 className="font-semibold text-foreground mb-2">{step.title}</h4>
                                         <p className="text-sm text-muted-foreground mb-3">{step.description}</p>
-                                        {step.owner && (
+                                        {step.suggested_owner_role && (
                                             <div className="text-xs text-muted-foreground pt-3 border-t border-border mt-auto">
-                                                Owner: <span className="font-medium text-foreground">{step.owner}</span>
+                                                Owner: <span className="font-medium text-foreground">{step.suggested_owner_role}</span>
                                             </div>
                                         )}
                                     </div>
@@ -80,15 +123,6 @@ export function AnalysisView({ analysisResult, onBack }) {
                             </div>
                         </div>
                     )}
-
-                    {/* Fallback layout if structure is different (e.g. key_changes list) */}
-                    {(analysis.key_changes || []).map((change, idx) => (
-                        <div key={idx} className="p-4 border border-border rounded-lg bg-secondary/10">
-                            <h4 className="font-medium text-foreground">{change.section || "General Change"}</h4>
-                            <p className="text-sm text-muted-foreground mt-1">{change.description}</p>
-                        </div>
-                    ))}
-
                 </div>
             </div>
         </div>
