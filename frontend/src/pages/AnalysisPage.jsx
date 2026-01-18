@@ -31,7 +31,6 @@ const AnalysisPage = () => {
     const handleGenerateTasks = async () => {
         setGeneratingTasks(true);
         try {
-            // Trigger the mock task generation endpoint which reads from the persisted analysis
             await api.get('/tasks/mock');
             navigate('/tasks');
         } catch (e) {
@@ -71,7 +70,6 @@ const AnalysisPage = () => {
             </div>
 
             <div className="grid gap-6 md:grid-cols-3">
-                {/* Main Analysis Column */}
                 <div className="md:col-span-2 space-y-6">
                     <Card className="border-l-4 border-l-blue-500">
                         <CardHeader>
@@ -121,7 +119,6 @@ const AnalysisPage = () => {
                     </Card>
                 </div>
 
-                {/* Action Panel Column */}
                 <div className="space-y-6">
                     <Card>
                         <CardHeader>

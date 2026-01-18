@@ -15,10 +15,7 @@ export function DocumentList({ onSelectDocument, onError }) {
         if (error) {
             onError(error);
         } else if (data) {
-            // Assume backend returns { documents: [...] } or just array based on contract. 
-            // Contract says GET /documents/list, usually returns a list or object with list.
-            // Let's assume array or { documents: [] } property. 
-            // Safe check:
+            // Normalize backend document list structure
             const docs = Array.isArray(data) ? data : (data.documents || data.files || []);
             setDocuments(docs);
         }

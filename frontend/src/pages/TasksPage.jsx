@@ -42,8 +42,8 @@ const TasksPage = ({ analysis }) => {
                     task.priority === "high"
                       ? "bg-red-600"
                       : task.priority === "medium"
-                      ? "bg-yellow-600"
-                      : "bg-muted"
+                        ? "bg-yellow-600"
+                        : "bg-muted"
                   }
                 >
                   {task.priority || "normal"}

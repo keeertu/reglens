@@ -1,5 +1,19 @@
-fastapi
-uvicorn
-pydantic
-requests
-python-multipart
+# --- RegLens Backend Dependencies ---
+
+# Core Web Framework
+fastapi>=0.100.0
+uvicorn>=0.22.0
+python-multipart>=0.0.6
+pydantic>=2.0.0
+
+# Document Processing
+pymupdf>=1.22.0     # Imported as fitz
+fpdf2>=2.7.4        # Modern FPDF implementation
+
+# AI & API Integration
+openai>=1.0.0       # OpenRouter compatible
+requests>=2.31.0
+python-dotenv>=1.0.0
+
+# Logging & Utilities
+# (Standard library modules: os, json, logging, difflib, uuid, re, pathlib, time, asyncio)

@@ -19,14 +19,12 @@ export function DocumentUpload({ onAnalysisComplete, onError }) {
         if (!oldFile || !newFile) return;
 
         setIsAnalyzing(true);
-        // Call the analyze endpoint directly with both files
         const { data, error } = await api.analyzeFiles(oldFile, newFile);
         setIsAnalyzing(false);
 
         if (error) {
             onError(error);
         } else {
-            // Pass the analysis result up
             onAnalysisComplete(data);
         }
     };
@@ -43,7 +41,6 @@ export function DocumentUpload({ onAnalysisComplete, onError }) {
             <p className="text-muted-foreground mb-8">Upload the old and new versions of the regulation to analyze changes.</p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                {/* Old Regulation Input */}
                 <div className="space-y-2">
                     <label className="block text-sm font-medium text-muted-foreground">Old Regulation</label>
                     <div className="relative">
@@ -69,7 +66,6 @@ export function DocumentUpload({ onAnalysisComplete, onError }) {
                     </div>
                 </div>
 
-                {/* New Regulation Input */}
                 <div className="space-y-2">
                     <label className="block text-sm font-medium text-muted-foreground">New Regulation</label>
                     <div className="relative">

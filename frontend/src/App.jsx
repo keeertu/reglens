@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, FileText, Activity } from 'lucide-react';
+import { LayoutDashboard, FileText, Activity, ShieldCheck } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { StatusBanner } from './components/StatusBanner';
 import { DocumentUpload } from './components/DocumentUpload';
 import { AnalysisView } from './components/AnalysisView';
 import { TaskDashboard } from './components/TaskDashboard';
+import TaskReview from './pages/TaskReview';
 
 function App() {
     const [activeTab, setActiveTab] = useState('documents');
@@ -24,32 +25,40 @@ function App() {
             {/* Header */}
             <header className="border-b bg-background/80 backdrop-blur-xl sticky top-0 z-50">
                 <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                            <Activity className="w-5 h-5 text-primary-foreground" />
-                        </div>
-                        <span className="text-xl font-bold">RegLens</span>
+                    <div className="flex items-center cursor-pointer">
+                        <span className="text-2xl font-semibold">
+                            <span className="text-white">Reg</span>
+                            <span className="text-blue-400">Lens</span>
+                        </span>
                     </div>
 
                     <nav className="flex space-x-1 bg-secondary/50 p-1 rounded-xl">
                         <button
                             onClick={() => setActiveTab('documents')}
-                            className={`px-4 py-2 rounded-lg text-sm ${
-                                activeTab === 'documents'
-                                    ? 'bg-primary text-primary-foreground'
-                                    : 'text-muted-foreground'
-                            }`}
+                            className={`px-4 py-2 rounded-lg text-sm ${activeTab === 'documents'
+                                ? 'bg-primary text-primary-foreground'
+                                : 'text-muted-foreground'
+                                }`}
                         >
                             <FileText className="inline w-4 h-4 mr-1" />
                             Documents
                         </button>
                         <button
+                            onClick={() => setActiveTab('task-review')}
+                            className={`px-4 py-2 rounded-lg text-sm ${activeTab === 'task-review'
+                                ? 'bg-primary text-primary-foreground'
+                                : 'text-muted-foreground'
+                                }`}
+                        >
+                            <ShieldCheck className="inline w-4 h-4 mr-1" />
+                            Task Review
+                        </button>
+                        <button
                             onClick={() => setActiveTab('tasks')}
-                            className={`px-4 py-2 rounded-lg text-sm ${
-                                activeTab === 'tasks'
-                                    ? 'bg-primary text-primary-foreground'
-                                    : 'text-muted-foreground'
-                            }`}
+                            className={`px-4 py-2 rounded-lg text-sm ${activeTab === 'tasks'
+                                ? 'bg-primary text-primary-foreground'
+                                : 'text-muted-foreground'
+                                }`}
                         >
                             <LayoutDashboard className="inline w-4 h-4 mr-1" />
                             Tasks
@@ -83,6 +92,19 @@ function App() {
                                     onError={handleError}
                                 />
                             )}
+                        </motion.div>
+                    )}
+
+                    {activeTab === 'task-review' && (
+                        <motion.div
+                            key="task-review"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                        >
+                            <TaskReview
+                                analysis={analysisResult}
+                            />
                         </motion.div>
                     )}
 

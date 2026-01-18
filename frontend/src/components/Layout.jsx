@@ -7,14 +7,13 @@ const Layout = () => {
     const location = useLocation();
 
     const navItems = [
-        { href: '/', label: 'Overview', icon: LayoutDashboard }, // Redirects to docs for now
+        { href: '/', label: 'Overview', icon: LayoutDashboard },
         { href: '/documents', label: 'Documents', icon: FileText },
         { href: '/tasks', label: 'Compliance Tasks', icon: CheckSquare },
     ];
 
     return (
         <div className="min-h-screen bg-background">
-            {/* Top Navigation */}
             <header className="border-b sticky top-0 bg-background/95 backdrop-blur z-50">
                 <div className="container mx-auto flex h-16 items-center justify-between px-4">
                     <div className="flex items-center gap-2">
@@ -46,7 +45,6 @@ const Layout = () => {
                 </div>
             </header>
 
-            {/* Main Content */}
             <main>
                 <Outlet />
             </main>

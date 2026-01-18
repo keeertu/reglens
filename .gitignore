@@ -1,29 +1,73 @@
-# Python
+# --- Python ---
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+/lib/
+/lib64/
+/parts/
+/sdist/
+/var/
+/wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.venv/
 venv/
-backend/venv/
-.env
+ENV/
 
-# Node
+# --- Environment ---
+.env
+.venv
+*.env
+*.env.development
+*.env.local
+
+# --- Node / React ---
 node_modules/
 frontend/node_modules/
-dist/
+frontend/dist/
+frontend/build/
+.vite/
+.eslintcache
 
-# LLM / runtime outputs
-outputs/
-llm_pipeline/outputs/
-state/
-data/
-
-# Backend runtime artifacts
-backend/data/
-backend/state/
-backend/audit.log
-
-# OS junk
+# --- OS ---
 .DS_Store
-# Temp files generated during analysis
+.DS_Store?
+._*
+Thumbs.db
+desktop.ini
+
+# --- IDEs ---
+.vscode/
+.idea/
+*.swp
+*.swo
+.project
+.pydevproject
+.settings/
+
+# --- RegLens Runtime Artifacts ---
+# Analysis temp files
 backend/tmp_*
+# Generated reports and exports
 backend/*.pdf
 backend/*.txt
+# Logs
+*.log
+backend/audit.log
+# Data/State (if any)
+backend/data/
+backend/state/
+outputs/
+llm_pipeline/outputs/
+data/
+state/

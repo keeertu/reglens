@@ -10,7 +10,7 @@ const UploadPage = () => {
     const [title, setTitle] = useState('');
     const [version, setVersion] = useState('');
     const [uploading, setUploading] = useState(false);
-    const [status, setStatus] = useState(null); // 'success', 'error'
+    const [status, setStatus] = useState(null);
 
     const handleFileChange = (e) => {
         if (e.target.files) {
