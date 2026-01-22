@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Bot, ArrowRight, AlertTriangle, CheckCircle2, FileText, Loader2, ListTodo } from 'lucide-react';
+import { Bot, Loader2, ListTodo } from 'lucide-react';
 import api from '@/services/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -15,20 +15,34 @@ const AnalysisPage = () => {
     const [generatingTasks, setGeneratingTasks] = useState(false);
 
     useEffect(() => {
-        const stored = sessionStorage.getItem("analysis_result");
+        try {
+            const stored = sessionStorage.getItem("analysis_result");
 
-        if (!stored) {
-            setError("No analysis found. Upload files again.");
+            if (!stored) {
+                setError("No analysis found. Upload files again.");
+                setLoading(false);
+                return;
+            }
+
+            const parsed = JSON.parse(stored);
+
+            if (!parsed || !parsed.changes) {
+                setError("Analysis data corrupted. Re-upload files.");
+                setLoading(false);
+                return;
+            }
+
+            setAnalysis(parsed);
+        } catch (err) {
+            setError("Failed to load analysis. Try again.");
+        } finally {
             setLoading(false);
-            return;
         }
-
-        setAnalysis(JSON.parse(stored));
-        setLoading(false);
     }, []);
 
-
     const handleGenerateTasks = async () => {
+        if (!analysis?.changes) return;
+
         setGeneratingTasks(true);
         try {
             await api.generateTasks(analysis.changes);
@@ -39,7 +53,6 @@ const AnalysisPage = () => {
             setGeneratingTasks(false);
         }
     };
-
 
     if (loading) {
         return (
@@ -86,43 +99,49 @@ const AnalysisPage = () => {
                                 <Badge variant="secondary" className="bg-blue-50 text-blue-700">AI Generated</Badge>
                             </div>
                         </CardHeader>
+
                         <CardContent>
                             <div className="bg-muted/30 p-4 rounded-lg text-sm mb-6">
-                                "{analysis.summary}"
+                                "{analysis?.summary || "No summary generated."}"
                             </div>
 
                             <h3 className="text-lg font-semibold mb-3">Detected Changes</h3>
+
                             <div className="space-y-4">
-                                {analysis.changes.map((change, i) => (
-                                    <div key={i} className="border rounded-lg p-4 bg-card shadow-sm">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <Badge variant="outline">{change.section}</Badge>
-                                            <span className="text-xs font-semibold text-amber-600 bg-amber-50 px-2 py-1 rounded">
-                                                {change.type}
-                                            </span>
+                                {analysis?.changes?.length > 0 ? (
+                                    analysis.changes.map((change, i) => (
+                                        <div key={i} className="border rounded-lg p-4 bg-card shadow-sm">
+                                            <div className="flex justify-between items-start mb-2">
+                                                <Badge variant="outline">{change.section}</Badge>
+                                                <span className="text-xs font-semibold text-amber-600 bg-amber-50 px-2 py-1 rounded">
+                                                    {change.type}
+                                                </span>
+                                            </div>
+
+                                            {change.before && (
+                                                <div className="bg-red-50/50 p-2 rounded border border-red-100 mt-2">
+                                                    <span className="font-semibold text-red-700 block mb-1">Original Text</span>
+                                                    <span className="text-red-900/80">{change.before}</span>
+                                                </div>
+                                            )}
+
+                                            {change.after && (
+                                                <div className="bg-green-50/50 p-2 rounded border border-green-100 mt-2">
+                                                    <span className="font-semibold text-green-700 block mb-1">New Text</span>
+                                                    <span className="text-green-900/80">{change.after}</span>
+                                                </div>
+                                            )}
+
+                                            {change.text && (
+                                                <div className="bg-muted p-2 rounded border mt-2">
+                                                    {change.text}
+                                                </div>
+                                            )}
                                         </div>
-
-                                        {change.before && (
-                                            <div className="bg-red-50/50 p-2 rounded border border-red-100 mt-2">
-                                                <span className="font-semibold text-red-700 block mb-1">Original Text</span>
-                                                <span className="text-red-900/80">{change.before}</span>
-                                            </div>
-                                        )}
-
-                                        {change.after && (
-                                            <div className="bg-green-50/50 p-2 rounded border border-green-100 mt-2">
-                                                <span className="font-semibold text-green-700 block mb-1">New Text</span>
-                                                <span className="text-green-900/80">{change.after}</span>
-                                            </div>
-                                        )}
-
-                                        {change.text && (
-                                            <div className="bg-muted p-2 rounded border mt-2">
-                                                {change.text}
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
+                                    ))
+                                ) : (
+                                    <p className="text-muted-foreground">No detected changes.</p>
+                                )}
                             </div>
                         </CardContent>
                     </Card>
@@ -134,6 +153,7 @@ const AnalysisPage = () => {
                             <CardTitle>Recommended Actions</CardTitle>
                             <CardDescription>Based on analysis</CardDescription>
                         </CardHeader>
+
                         <CardContent className="space-y-4">
                             <p className="text-sm text-muted-foreground">
                                 Generate compliance tasks from detected changes.
