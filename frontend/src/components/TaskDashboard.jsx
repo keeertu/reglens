@@ -13,8 +13,12 @@ export const TaskDashboard = ({ analysis }) => {
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        fetchTasks();
-    }, []);
+        if (analysis) {
+            fetchTasks();
+        } else {
+            setTasks([]);
+        }
+    }, [analysis]);
 
     const fetchTasks = async () => {
         try {
