@@ -1,119 +1,91 @@
 import React, { useState } from 'react';
-import { Upload, FileUp, AlertCircle, CheckCircle } from 'lucide-react';
+import { Upload, Loader2, AlertCircle } from 'lucide-react';
 import api from '@/services/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { useNavigate } from 'react-router-dom';
 
 const UploadPage = () => {
-    const [file, setFile] = useState(null);
-    const [title, setTitle] = useState('');
-    const [version, setVersion] = useState('');
-    const [uploading, setUploading] = useState(false);
-    const [status, setStatus] = useState(null);
+    const navigate = useNavigate();
+    const [oldFile, setOldFile] = useState(null);
+    const [newFile, setNewFile] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
 
-    const handleFileChange = (e) => {
-        if (e.target.files) {
-            setFile(e.target.files[0]);
-        }
-    };
-
-    const handleUpload = async (e) => {
+    const handleAnalyze = async (e) => {
         e.preventDefault();
-        if (!file || !title || !version) return;
+        if (!oldFile || !newFile) return;
 
-        setUploading(true);
-        setStatus(null);
-
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('title', title);
-        formData.append('version', version);
+        setLoading(true);
+        setError(null);
 
         try {
-            await api.post('/documents/upload', formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                },
-            });
-            setStatus('success');
-            setFile(null);
-            setTitle('');
-            setVersion('');
-        } catch (error) {
-            console.error(error);
-            setStatus('error');
+            const result = await api.analyzeFiles(oldFile, newFile);
+
+            if (result.error) {
+                throw new Error(result.error);
+            }
+
+            // Store analysis result for AnalysisPage
+            sessionStorage.setItem("analysis_result", JSON.stringify(result.data));
+
+            navigate("/analysis");
+        } catch (err) {
+            console.error(err);
+            setError("Analysis failed. Try smaller or valid files.");
         } finally {
-            setUploading(false);
+            setLoading(false);
         }
     };
 
     return (
-        <div className="container mx-auto py-10 max-w-2xl animate-in fade-in duration-500">
+        <div className="container mx-auto py-12 max-w-2xl animate-in fade-in duration-500">
             <div className="mb-8 text-center">
-                <h1 className="text-3xl font-bold tracking-tight mb-2">Ingest Regulation</h1>
-                <p className="text-muted-foreground">Upload new RBI circulars for automated analysis.</p>
+                <h1 className="text-3xl font-bold mb-2">Compare Regulations</h1>
+                <p className="text-muted-foreground">Upload two regulatory PDFs to detect changes.</p>
             </div>
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Document Upload</CardTitle>
-                    <CardDescription>Supported formats: PDF. Max size: 10MB.</CardDescription>
+                    <CardTitle>Upload Old & New Versions</CardTitle>
+                    <CardDescription>Supported: PDF or TXT</CardDescription>
                 </CardHeader>
+
                 <CardContent>
-                    <form onSubmit={handleUpload} className="space-y-6">
+                    <form onSubmit={handleAnalyze} className="space-y-6">
+
                         <div className="space-y-2">
-                            <label className="text-sm font-medium leading-none">Document Title</label>
-                            <Input
-                                placeholder="e.g. Master Direction KYC"
-                                value={title}
-                                onChange={(e) => setTitle(e.target.value)}
-                                required
-                            />
+                            <label className="text-sm font-medium">Old Regulation File</label>
+                            <Input type="file" accept=".pdf,.txt" onChange={(e) => setOldFile(e.target.files[0])} required />
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium leading-none">Version / Series</label>
-                            <Input
-                                placeholder="e.g. 2025.1.0"
-                                value={version}
-                                onChange={(e) => setVersion(e.target.value)}
-                                required
-                            />
+                            <label className="text-sm font-medium">New Regulation File</label>
+                            <Input type="file" accept=".pdf,.txt" onChange={(e) => setNewFile(e.target.files[0])} required />
                         </div>
 
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium leading-none">File</label>
-                            <Input
-                                type="file"
-                                accept=".pdf"
-                                onChange={handleFileChange}
-                                required
-                                className="cursor-pointer"
-                            />
-                        </div>
-
-                        {status === 'success' && (
-                            <div className="bg-green-50 text-green-700 p-4 rounded-md flex items-center gap-2">
-                                <CheckCircle className="h-5 w-5" />
-                                Upload successful! Document is ready for analysis.
-                            </div>
-                        )}
-
-                        {status === 'error' && (
-                            <div className="bg-red-50 text-red-700 p-4 rounded-md flex items-center gap-2">
+                        {error && (
+                            <div className="bg-red-50 text-red-700 p-3 rounded flex items-center gap-2">
                                 <AlertCircle className="h-5 w-5" />
-                                Upload failed. Please check the file and try again.
+                                {error}
                             </div>
                         )}
 
-                        <Button type="submit" className="w-full" disabled={uploading}>
-                            {uploading ? "Uploading..." : (
+                        <Button type="submit" className="w-full" disabled={loading}>
+                            {loading ? (
                                 <>
-                                    <Upload className="mr-2 h-4 w-4" /> Upload Document
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Analyzing...
+                                </>
+                            ) : (
+                                <>
+                                    <Upload className="mr-2 h-4 w-4" />
+                                    Run Analysis
                                 </>
                             )}
                         </Button>
+
                     </form>
                 </CardContent>
             </Card>
