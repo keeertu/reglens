@@ -36,7 +36,10 @@ raw_origins = os.getenv("ALLOWED_ORIGINS", "")
 ALLOWED_ORIGINS = [o.strip() for o in raw_origins.split(",") if o.strip()]
 
 if not ALLOWED_ORIGINS:
-    ALLOWED_ORIGINS = ["http://localhost:5173"]
+    ALLOWED_ORIGINS = [
+        "http://localhost:5173",
+        "https://reg-lens.vercel.app",
+    ]
 
 app.add_middleware(
     CORSMiddleware,
