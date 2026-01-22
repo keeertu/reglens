@@ -25,15 +25,15 @@ const UploadPage = () => {
 
             console.log("ANALYSIS RESULT:", result);
 
-            if (!result || result.error) {
-                throw new Error(result?.error || "No analysis returned");
+            if (!result || result.error || !result.data || !result.data.changes) {
+                throw new Error(result?.error || "Invalid analysis returned");
             }
 
-            // Store analysis result for AnalysisPage
-            sessionStorage.setItem("analysis_result", JSON.stringify(result.data || result));
-
+// Store only valid analysis
+            sessionStorage.setItem("analysis_result", JSON.stringify(result.data));
 
             navigate("/analysis");
+
 
         } catch (err) {
             console.error("ANALYSIS FAILED:", err);
