@@ -30,7 +30,8 @@ const UploadPage = () => {
             }
 
 // Store only valid analysis
-            sessionStorage.setItem("analysis_result", JSON.stringify(result.data));
+            sessionStorage.setItem("analysis_result", JSON.stringify(result));
+
 
             navigate("/analysis");
 
