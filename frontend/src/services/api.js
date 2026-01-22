@@ -1,5 +1,5 @@
-const BACKEND_URL = import.meta.env.VITE_API_URL 
-  || "https://reglens-sgxn.onrender.com";
+const RAW_URL = import.meta.env.VITE_API_URL || "https://reglens-sgxn.onrender.com";
+const BACKEND_URL = RAW_URL.replace(/\/$/, "");
 
 
 export const api = {

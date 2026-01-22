@@ -9,8 +9,19 @@ import TaskReview from './pages/TaskReview';
 
 function App() {
     const [activeTab, setActiveTab] = useState('documents');
-    const [analysisResult, setAnalysisResult] = useState(null);
+    const [analysisResult, setAnalysisResult] = React.useState(() => {
+        const saved = sessionStorage.getItem("analysis_result");
+        return saved ? JSON.parse(saved) : null;
+    });
     const [globalError, setGlobalError] = useState(null);
+
+    React.useEffect(() => {
+        if (analysisResult) {
+            sessionStorage.setItem("analysis_result", JSON.stringify(analysisResult));
+        } else {
+            sessionStorage.removeItem("analysis_result");
+        }
+    }, [analysisResult]);
 
     const handleError = (errorMsg) => {
         setGlobalError(errorMsg);

@@ -31,20 +31,20 @@ from task_client import generate_compliance_task
 
 app = FastAPI(title="RegLens Backend")
 
+# CORS Configuration
+raw_origins = os.getenv("ALLOWED_ORIGINS", "")
+ALLOWED_ORIGINS = [o.strip() for o in raw_origins.split(",") if o.strip()]
+
+if not ALLOWED_ORIGINS:
+    ALLOWED_ORIGINS = ["http://localhost:5173"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # allow all origins for now
-    allow_credentials=True,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-@app.options("/analyze")
-async def analyze_options():
-    return {"ok": True}
-
-@app.options("/{path:path}")
-async def options_handler(path: str):
-    return {"ok": True}
 
 
 
@@ -242,8 +242,10 @@ async def analyze(old: UploadFile = File(...), new: UploadFile = File(...)):
     old_filename = os.path.basename(old.filename)
     new_filename = os.path.basename(new.filename)
     
-    old_path = Path(f"tmp_{uuid.uuid4()}_{old_filename}")
-    new_path = Path(f"tmp_{uuid.uuid4()}_{new_filename}")
+    import tempfile
+    tmp_dir = Path(tempfile.gettempdir())
+    old_path = tmp_dir / f"reglens_{uuid.uuid4()}_{old_filename}"
+    new_path = tmp_dir / f"reglens_{uuid.uuid4()}_{new_filename}"
 
     async with analyze_semaphore:
         try:
