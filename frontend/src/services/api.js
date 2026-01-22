@@ -1,4 +1,4 @@
-const BACKEND_URL = "https://reglens-sgxn.onrender.com"
+const BACKEND_URL = import.meta.env.VITE_API_URL || "https://reglens-sgxn.onrender.com";
 
 export const api = {
   get: async (endpoint) => {
