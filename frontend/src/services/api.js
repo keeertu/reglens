@@ -1,4 +1,4 @@
-const BACKEND_URL = "http://localhost:8000";
+const BACKEND_URL = "https://reglens-sgxn.onrender.com"
 
 export const api = {
   get: async (endpoint) => {
