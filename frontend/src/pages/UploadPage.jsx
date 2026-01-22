@@ -23,16 +23,19 @@ const UploadPage = () => {
         try {
             const result = await api.analyzeFiles(oldFile, newFile);
 
-            if (result.error) {
-                throw new Error(result.error);
+            console.log("ANALYSIS RESULT:", result);
+
+            if (!result || result.error) {
+                throw new Error(result?.error || "No analysis returned");
             }
 
             // Store analysis result for AnalysisPage
             sessionStorage.setItem("analysis_result", JSON.stringify(result.data));
 
             navigate("/analysis");
+
         } catch (err) {
-            console.error(err);
+            console.error("ANALYSIS FAILED:", err);
             setError("Analysis failed. Try smaller or valid files.");
         } finally {
             setLoading(false);
