@@ -29,6 +29,8 @@ from openai import OpenAI
 from llm_client import explain_changes
 from task_client import generate_compliance_task
 
+app = FastAPI(title="RegLens Backend")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # allow all origins for now
@@ -36,6 +38,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 
 # ================= BASIC ROUTES =================
