@@ -30,7 +30,8 @@ const UploadPage = () => {
             }
 
             // Store analysis result for AnalysisPage
-            sessionStorage.setItem("analysis_result", JSON.stringify(result.data));
+            sessionStorage.setItem("analysis_result", JSON.stringify(result.data || result));
+
 
             navigate("/analysis");
 
