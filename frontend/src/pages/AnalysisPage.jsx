@@ -80,7 +80,7 @@ const AnalysisPage = () => {
                                         AI Analysis Report
                                     </CardTitle>
                                     <CardDescription className="mt-1">
-                                        Regulator: {analysis.regulator} • Confidence: High
+                                        RegLens Diff Engine • Confidence: High
                                     </CardDescription>
                                 </div>
                                 <Badge variant="secondary" className="bg-blue-50 text-blue-700">AI Generated</Badge>
@@ -88,30 +88,39 @@ const AnalysisPage = () => {
                         </CardHeader>
                         <CardContent>
                             <div className="bg-muted/30 p-4 rounded-lg text-sm mb-6">
-                                "{analysis.confidence_note}"
+                                "{analysis.summary}"
                             </div>
 
                             <h3 className="text-lg font-semibold mb-3">Detected Changes</h3>
                             <div className="space-y-4">
-                                {analysis.detected_changes.map((change, i) => (
+                                {analysis.changes.map((change, i) => (
                                     <div key={i} className="border rounded-lg p-4 bg-card shadow-sm">
                                         <div className="flex justify-between items-start mb-2">
                                             <Badge variant="outline">{change.section}</Badge>
-                                            <span className="text-xs font-semibold text-amber-600 bg-amber-50 px-2 py-1 rounded">Impact: High</span>
+                                            <span className="text-xs font-semibold text-amber-600 bg-amber-50 px-2 py-1 rounded">
+                                                {change.type}
+                                            </span>
                                         </div>
-                                        <div className="grid gap-4 mt-3 text-sm">
-                                            <div className="bg-red-50/50 p-2 rounded border border-red-100">
+
+                                        {change.before && (
+                                            <div className="bg-red-50/50 p-2 rounded border border-red-100 mt-2">
                                                 <span className="font-semibold text-red-700 block mb-1">Original Text</span>
-                                                <span className="text-red-900/80">{change.original_text}</span>
+                                                <span className="text-red-900/80">{change.before}</span>
                                             </div>
-                                            <div className="bg-green-50/50 p-2 rounded border border-green-100">
+                                        )}
+
+                                        {change.after && (
+                                            <div className="bg-green-50/50 p-2 rounded border border-green-100 mt-2">
                                                 <span className="font-semibold text-green-700 block mb-1">New Text</span>
-                                                <span className="text-green-900/80">{change.new_text}</span>
+                                                <span className="text-green-900/80">{change.after}</span>
                                             </div>
-                                            <div className="text-sm text-muted-foreground mt-1">
-                                                <strong>Implication:</strong> {change.implication}
+                                        )}
+
+                                        {change.text && (
+                                            <div className="bg-muted p-2 rounded border mt-2">
+                                                {change.text}
                                             </div>
-                                        </div>
+                                        )}
                                     </div>
                                 ))}
                             </div>
@@ -126,15 +135,9 @@ const AnalysisPage = () => {
                             <CardDescription>Based on analysis</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            {analysis.recommended_tasks.map((task, i) => (
-                                <div key={i} className="flex gap-3 items-start pb-3 border-b last:border-0">
-                                    <div className={`mt-0.5 h-2 w-2 rounded-full ${task.priority === 'Critical' ? 'bg-red-500' : 'bg-orange-400'}`} />
-                                    <div>
-                                        <p className="text-sm font-medium leading-tight">{task.action}</p>
-                                        <p className="text-xs text-muted-foreground mt-1">Assign: {task.team}</p>
-                                    </div>
-                                </div>
-                            ))}
+                            <p className="text-sm text-muted-foreground">
+                                Generate compliance tasks from detected changes.
+                            </p>
 
                             <Button onClick={handleGenerateTasks} className="w-full mt-4" disabled={generatingTasks}>
                                 {generatingTasks ? (
