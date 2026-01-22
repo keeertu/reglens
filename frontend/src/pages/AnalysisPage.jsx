@@ -15,31 +15,31 @@ const AnalysisPage = () => {
     const [generatingTasks, setGeneratingTasks] = useState(false);
 
     useEffect(() => {
-        const runAnalysis = async () => {
-            try {
-                const res = await api.get(`/analyze/${encodeURIComponent(filename)}`);
-                setAnalysis(res.data);
-            } catch (err) {
-                setError('Analysis failed. File might be missing or corrupted.');
-            } finally {
-                setLoading(false);
-            }
-        };
-        runAnalysis();
-    }, [filename]);
+        const stored = sessionStorage.getItem("analysis_result");
+
+        if (!stored) {
+            setError("No analysis found. Upload files again.");
+            setLoading(false);
+            return;
+        }
+
+        setAnalysis(JSON.parse(stored));
+        setLoading(false);
+    }, []);
+
 
     const handleGenerateTasks = async () => {
         setGeneratingTasks(true);
         try {
-            await api.get('/tasks/mock');
+            await api.generateTasks(analysis.changes);
             navigate('/tasks');
         } catch (e) {
-            console.error(e);
             alert('Failed to generate tasks');
         } finally {
             setGeneratingTasks(false);
         }
     };
+
 
     if (loading) {
         return (
