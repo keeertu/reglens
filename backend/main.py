@@ -38,6 +38,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+@app.options("/analyze")
+async def analyze_options():
+    return {"ok": True}
+
+@app.options("/{path:path}")
+async def options_handler(path: str):
+    return {"ok": True}
 
 
 
