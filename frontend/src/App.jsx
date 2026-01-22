@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import api from './services/api';
 import { LayoutDashboard, FileText, Activity, ShieldCheck } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { StatusBanner } from './components/StatusBanner';
@@ -9,19 +10,14 @@ import TaskReview from './pages/TaskReview';
 
 function App() {
     const [activeTab, setActiveTab] = useState('documents');
-    const [analysisResult, setAnalysisResult] = React.useState(() => {
-        const saved = sessionStorage.getItem("analysis_result");
-        return saved ? JSON.parse(saved) : null;
-    });
+    const [analysisResult, setAnalysisResult] = useState(null);
     const [globalError, setGlobalError] = useState(null);
 
-    React.useEffect(() => {
-        if (analysisResult) {
-            sessionStorage.setItem("analysis_result", JSON.stringify(analysisResult));
-        } else {
-            sessionStorage.removeItem("analysis_result");
-        }
-    }, [analysisResult]);
+    useEffect(() => {
+        // Force fresh start on reload: clear local storage and backend task state
+        sessionStorage.clear();
+        api.generateTasks([]).catch(err => console.error("Failed to reset backend state:", err));
+    }, []);
 
     const handleError = (errorMsg) => {
         setGlobalError(errorMsg);
