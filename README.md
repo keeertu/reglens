@@ -14,8 +14,6 @@ RegLens is a high-performance regulatory compliance platform designed to bridge 
 
 ## 📽️ Demo & Visuals
 
-![RegLens Banner](./Keerat%20Khanuja.png)
-
 > [!TIP]
 > **Watch the Demo Video**: (https://github.com/keeertu/reglens/blob/main/Reglens_Demo.mp4)
 
