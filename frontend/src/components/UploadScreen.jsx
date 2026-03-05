@@ -207,6 +207,12 @@ export default function UploadScreen({ onStartAnalysis }) {
 
     const bothFilesLoaded = file1 && file2;
 
+    const handleStart = () => {
+        if (bothFilesLoaded) {
+            onStartAnalysis(file1, file2);
+        }
+    };
+
     return (
         <div style={{ position: 'relative', minHeight: '100vh', width: '100vw', backgroundColor: 'var(--bg-deep)', overflowX: 'hidden' }}>
             <NetworkGraph />
@@ -324,7 +330,7 @@ export default function UploadScreen({ onStartAnalysis }) {
                     <div style={{ marginTop: '32px', width: '100%', display: 'flex', justifyContent: 'center' }}>
                         <button
                             className="compare-btn"
-                            onClick={onStartAnalysis}
+                            onClick={handleStart}
                             disabled={!bothFilesLoaded}
                             style={{
                                 width: '100%', maxWidth: '300px',

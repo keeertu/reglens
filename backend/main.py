@@ -311,6 +311,11 @@ def generate_tasks_llm(body: dict = Body(None)):
             if task_data:
                 task_data["id"] = str(uuid.uuid4())
                 task_data["status"] = "pending"
+                # Include the raw change context for the UI diff viewer
+                task_data["diff_context"] = {
+                    "old": change.get("before") or (change.get("text") if change.get("type") == "REMOVED" else ""),
+                    "new": change.get("after") or (change.get("text") if change.get("type") == "ADDED" else "")
+                }
                 TASK_STORE.append(task_data)
                 count += 1
         except Exception:

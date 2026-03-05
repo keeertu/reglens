@@ -7,7 +7,7 @@ const NODES = [
     { id: 4, label: "Generating Tasks", delay: 3200 }
 ];
 
-export default function AnalysisLoadingScreen({ onComplete }) {
+export default function AnalysisLoadingScreen({ onComplete, isFinished }) {
     const [activeNodes, setActiveNodes] = useState([]);
     const [progress, setProgress] = useState(0);
 
@@ -27,31 +27,36 @@ export default function AnalysisLoadingScreen({ onComplete }) {
         const updateProgress = (currentTime) => {
             const elapsed = currentTime - startTime;
             const t = Math.min(elapsed / duration, 1);
-
-            // easeOutCubic: 1 - Math.pow(1 - t, 3)
-            // linear could just be: const easedT = t;
-            // We'll just do a cubic-bezier-like approximation or just use standard timing 
-            // The CSS bar uses cubic-bezier, we can just do a linear count for the text, or simple ease
             const p = Math.floor(t * 100);
-            setProgress(p);
 
-            if (t < 1) {
+            // If data is still loading, cap progress at 92%
+            if (!isFinished && p > 92) {
+                setProgress(92);
+            } else {
+                setProgress(p);
+            }
+
+            if (t < 1 || (!isFinished && p >= 92)) {
                 animationFrame = requestAnimationFrame(updateProgress);
             }
         };
         animationFrame = requestAnimationFrame(updateProgress);
 
-        // Auto advance after 5200ms
-        const completeTimeout = setTimeout(() => {
-            if (onComplete) onComplete();
-        }, 5200);
-
         return () => {
             timeouts.forEach(clearTimeout);
-            clearTimeout(completeTimeout);
             cancelAnimationFrame(animationFrame);
         };
-    }, [onComplete]);
+    }, [isFinished]);
+
+    useEffect(() => {
+        // Only advance once both animation and API are finished
+        if (isFinished && progress >= 100) {
+            const completeTimeout = setTimeout(() => {
+                if (onComplete) onComplete();
+            }, 600);
+            return () => clearTimeout(completeTimeout);
+        }
+    }, [isFinished, progress, onComplete]);
 
     // Generate some random particles for the background
     const particles = Array.from({ length: 12 }).map((_, i) => ({
