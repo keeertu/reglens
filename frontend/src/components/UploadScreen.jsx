@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { motion, useAnimation } from 'framer-motion';
+import { motion } from 'framer-motion';
 
 // --- NETWORK GRAPH BACKGROUND ---
 const NetworkGraph = () => {
@@ -23,11 +23,10 @@ const NetworkGraph = () => {
     const lines = [];
     for (let i = 0; i < nodes.length; i++) {
         for (let j = i + 1; j < nodes.length; j++) {
-            // Very rough distance estimation using percentages just for visual connection mapping
             const dx = nodes[i].x - nodes[j].x;
             const dy = nodes[i].y - nodes[j].y;
             const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist < 15) { // Only connect if relatively close
+            if (dist < 15) {
                 lines.push({ id: `${i}-${j}`, start: nodes[i], end: nodes[j] });
             }
         }
@@ -40,13 +39,14 @@ const NetworkGraph = () => {
                 {lines.map(line => (
                     <motion.line
                         key={line.id}
-                        x1={`${line.start.x}%`}
-                        y1={`${line.start.y}%`}
-                        x2={`${line.end.x}%`}
-                        y2={`${line.end.y}%`}
                         stroke="#141825"
                         strokeWidth="1"
-                        initial={{ x1: `${line.start.x}%`, y1: `${line.start.y}%`, x2: `${line.end.x}%`, y2: `${line.end.y}%` }}
+                        initial={{
+                            x1: `${line.start.x}%`,
+                            y1: `${line.start.y}%`,
+                            x2: `${line.end.x}%`,
+                            y2: `${line.end.y}%`
+                        }}
                         animate={{
                             x1: `calc(${line.start.x}% + ${line.start.tx}px)`,
                             y1: `calc(${line.start.y}% + ${line.start.ty}px)`,
@@ -65,10 +65,9 @@ const NetworkGraph = () => {
                 {nodes.map(node => (
                     <motion.circle
                         key={node.id}
-                        cx={`${node.x}%`}
-                        cy={`${node.y}%`}
                         r="1.5"
                         fill="#1e2535"
+                        initial={{ cx: `${node.x}%`, cy: `${node.y}%` }}
                         animate={{
                             cx: `calc(${node.x}% + ${node.tx}px)`,
                             cy: `calc(${node.y}% + ${node.ty}px)`,
@@ -83,7 +82,6 @@ const NetworkGraph = () => {
                     />
                 ))}
             </svg>
-            {/* Radial Spotlight Overlay */}
             <div style={{
                 position: 'absolute',
                 top: 0, left: 0, width: '100%', height: '100%',
@@ -95,7 +93,7 @@ const NetworkGraph = () => {
 
 
 // --- UPLOAD ZONES ---
-function DropZone({ label, file, onDrop, alignRect = "center" }) {
+function DropZone({ label, file, onDrop }) {
     const [isHovered, setIsHovered] = useState(false);
     const fileInputRef = useRef(null);
 
@@ -133,17 +131,19 @@ function DropZone({ label, file, onDrop, alignRect = "center" }) {
         >
             <input type="file" ref={fileInputRef} onChange={handleChange} accept=".pdf" style={{ display: 'none' }} />
 
-            {/* Dashed background SVG replacing generic CSS border, 
-          using a styled SVG rect to allow border-dash animation or precise coloring */}
             <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', borderRadius: '10px' }}>
                 <rect
-                    x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"
+                    x="0.5" y="0.5"
+                    style={{
+                        width: 'calc(100% - 1px)',
+                        height: 'calc(100% - 1px)',
+                        transition: 'stroke 0.2s ease'
+                    }}
                     fill="none"
                     stroke={isHovered ? '#0ea5e9' : '#1a1d27'}
                     strokeWidth="1"
                     strokeDasharray={isHovered ? 'none' : '4 4'}
                     rx="10" ry="10"
-                    style={{ transition: 'stroke 0.2s ease' }}
                 />
             </svg>
 
@@ -161,14 +161,12 @@ function DropZone({ label, file, onDrop, alignRect = "center" }) {
                 </div>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
-                    {/* Document Preview Mockup */}
                     <div style={{ position: 'relative', width: '100px', height: '130px', backgroundColor: '#fff', borderRadius: '4px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.2)', marginBottom: '16px' }}>
                         <div style={{ height: '4px', width: '100%', backgroundColor: '#1a1d27', opacity: 0.1, borderRadius: '2px' }}></div>
                         <div style={{ height: '4px', width: '80%', backgroundColor: '#1a1d27', opacity: 0.1, borderRadius: '2px' }}></div>
                         <div style={{ height: '4px', width: '90%', backgroundColor: '#1a1d27', opacity: 0.1, borderRadius: '2px' }}></div>
                         <div style={{ height: '4px', width: '60%', backgroundColor: '#1a1d27', opacity: 0.1, borderRadius: '2px' }}></div>
                         <div style={{ height: '4px', width: '75%', backgroundColor: '#1a1d27', opacity: 0.1, borderRadius: '2px' }}></div>
-
                         <motion.div
                             initial={{ scale: 0 }}
                             animate={{ scale: 1 }}
@@ -181,11 +179,10 @@ function DropZone({ label, file, onDrop, alignRect = "center" }) {
                             </svg>
                         </motion.div>
                     </div>
-
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', color: '#0ea5e9', maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: '4px' }}>
                         {file.name}
                     </div>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', color: '#2d3348', display: 'flex', gap: '4px' }}>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', color: '#2d3348' }}>
                         ~12 pages · PDF
                     </div>
                 </div>
@@ -247,17 +244,13 @@ export default function UploadScreen({ onStartAnalysis }) {
         }
       `}} />
 
-            {/* Top Left Logo */}
             <div style={{ position: 'absolute', top: '32px', left: '40px', display: 'flex', alignItems: 'center', gap: '8px', zIndex: 10 }}>
                 <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: '18px', color: 'var(--accent)' }}>RL</span>
                 <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: 600, fontSize: '16px', color: '#fff' }}>RegLens</span>
             </div>
 
             <div style={{ position: 'relative', zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: '8vh', paddingBottom: '100px' }}>
-
-                {/* Hero Section */}
                 <div style={{ position: 'relative', textAlign: 'center', maxWidth: '800px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-
                     <div style={{
                         backgroundColor: '#0f1827', border: '1px solid #1e3a5f', borderRadius: '20px',
                         padding: '6px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: '9px',
@@ -265,15 +258,12 @@ export default function UploadScreen({ onStartAnalysis }) {
                     }}>
                         AI-POWERED REGULATORY INTELLIGENCE
                     </div>
-
                     <h1 style={{
                         fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: '56px',
                         lineHeight: 1.1, color: '#fff', marginBottom: '24px', position: 'relative'
                     }}>
                         Detect Every Change.<br />
                         Before It <span style={{ color: 'var(--accent)' }}>Costs You.</span>
-
-                        {/* Absolute positioned stat floating chips */}
                         {STAT_CHIPS.map(chip => (
                             <div key={chip.id} style={{
                                 position: 'absolute',
@@ -290,7 +280,6 @@ export default function UploadScreen({ onStartAnalysis }) {
                             </div>
                         ))}
                     </h1>
-
                     <p style={{
                         fontFamily: "'JetBrains Mono', monospace", fontSize: '13px', color: '#4b5563',
                         lineHeight: 1.7, maxWidth: '520px'
@@ -300,17 +289,13 @@ export default function UploadScreen({ onStartAnalysis }) {
                     </p>
                 </div>
 
-                {/* Upload Container */}
                 <div style={{
                     marginTop: '64px', width: '100%', maxWidth: '820px', display: 'flex', flexDirection: 'column', alignItems: 'center'
                 }}>
-
                     <div style={{ display: 'flex', gap: '16px', width: '100%', alignItems: 'stretch' }}>
                         <div style={{ flex: 1 }}>
                             <DropZone label="REGULATION v1 · BASELINE" file={file1} onDrop={setFile1} />
                         </div>
-
-                        {/* VS Divider */}
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 8px' }}>
                             <div style={{ width: '1px', flex: 1, backgroundColor: '#1a1d27' }} />
                             <div style={{
@@ -321,12 +306,10 @@ export default function UploadScreen({ onStartAnalysis }) {
                             </div>
                             <div style={{ width: '1px', flex: 1, backgroundColor: '#1a1d27' }} />
                         </div>
-
                         <div style={{ flex: 1 }}>
                             <DropZone label="REGULATION v2 · NEW" file={file2} onDrop={setFile2} />
                         </div>
                     </div>
-
                     <div style={{ marginTop: '32px', width: '100%', display: 'flex', justifyContent: 'center' }}>
                         <button
                             className="compare-btn"
@@ -357,8 +340,6 @@ export default function UploadScreen({ onStartAnalysis }) {
                             <span className="compare-btn-icon" style={{ opacity: bothFilesLoaded ? 1 : 0.3 }}>&rarr;</span>
                         </button>
                     </div>
-
-                    {/* Trust Bar */}
                     <div style={{
                         marginTop: '32px', width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px',
                         fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', color: '#2d3348', letterSpacing: '0.05em'
@@ -369,7 +350,6 @@ export default function UploadScreen({ onStartAnalysis }) {
                         <span style={{ color: '#1a1d27' }}>·</span>
                         <span>👤 Human review required prior to action</span>
                     </div>
-
                 </div>
             </div>
         </div>
