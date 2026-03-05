@@ -10,6 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fontsource/syne": "^5.0.0",
+    "@fontsource/jetbrains-mono": "^5.0.0",
     "@radix-ui/react-slot": "^1.2.4",
     "@tailwindcss/typography": "^0.5.19",
     "axios": "^1.6.2",
